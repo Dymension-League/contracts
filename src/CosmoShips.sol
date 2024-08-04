@@ -59,6 +59,30 @@ contract CosmoShips is ERC721, AccessControl, ReentrancyGuard, AttributeEncoder,
         _shipIdToMint += 1;
     }
 
+    function getCurrentTokenIdToMint() public view returns (uint256) {
+        return _shipIdToMint;
+    }
+
+    function batchMint(uint256[] calldata _attributes, bytes32[][] calldata _proofs, uint256 _count)
+        external
+        payable
+        nonReentrant
+    {
+        require(_attributes.length == _count && _proofs.length == _count, "Invalid input lengths");
+        require(msg.value == mintPrice * _count, "Incorrect payment sent");
+
+        for (uint256 i = 0; i < _count; i++) {
+            require(!tokenMinted[_shipIdToMint], "Token already minted");
+            require(verifier.verify(merkleRoot, _proofs[i], _shipIdToMint, _attributes[i]), "Invalid proof");
+
+            tokenMinted[_shipIdToMint] = true;
+            attributes[_shipIdToMint] = _attributes[i];
+            _safeMint(msg.sender, _shipIdToMint);
+            emit Minted(msg.sender, _shipIdToMint);
+            _shipIdToMint++;
+        }
+    }
+
     // The following functions are overrides required by Solidity.
     function _beforeTokenTransfer(address from, address to, uint256 firstTokenId, uint256 batchSize)
         internal
