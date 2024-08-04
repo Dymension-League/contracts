@@ -11,6 +11,7 @@ import "./IAttributeVerifier.sol";
 contract CosmoShips is ERC721, AccessControl, ReentrancyGuard, AttributeEncoder, ERC721Enumerable {
     bytes32 public constant MAINTENANCE_ROLE = keccak256("MAINTENANCE_ROLE");
     bytes32 public merkleRoot;
+    uint256 private _shipIdToMint;
     uint256 public mintPrice;
     IAttributeVerifier public verifier;
     mapping(uint256 => bool) public tokenMinted;
@@ -18,13 +19,21 @@ contract CosmoShips is ERC721, AccessControl, ReentrancyGuard, AttributeEncoder,
 
     event Minted(address minter, uint256 tokenId);
 
-    constructor(bytes32 _merkleRoot, uint256 _mintPrice, address _defaultAdmin, address _verifier)
-        ERC721("CosmoShips", "CSSS")
-    {
+    constructor(
+        bytes32 _merkleRoot,
+        uint256 _initialShipIdToMint,
+        uint256 _mintPrice,
+        address _defaultAdmin,
+        address _verifier
+    ) ERC721("CosmoShips", "CSSS") {
         merkleRoot = _merkleRoot;
         mintPrice = _mintPrice;
         _grantRole(DEFAULT_ADMIN_ROLE, _defaultAdmin);
         verifier = IAttributeVerifier(_verifier);
+        if (_initialShipIdToMint <= 0) {
+            _initialShipIdToMint = 1;
+        }
+        _shipIdToMint = _initialShipIdToMint;
     }
 
     function updateMerkleRoot(bytes32 _newRoot) external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -35,19 +44,19 @@ contract CosmoShips is ERC721, AccessControl, ReentrancyGuard, AttributeEncoder,
         mintPrice = _newPrice;
     }
 
-    function maintenance(uint256 _tokenId, uint256 _newAttribute) external onlyRole(MAINTENANCE_ROLE) {
-        attributes[_tokenId] = _newAttribute;
+    function maintenance(uint256 tokenId, uint256 _newAttribute) external onlyRole(MAINTENANCE_ROLE) {
+        attributes[tokenId] = _newAttribute;
     }
 
-    function mint(uint256 _tokenId, uint256 _attributes, bytes32[] calldata _proof) external payable nonReentrant {
-        require(msg.value == mintPrice, "Incorrect paymen sent");
-        require(!tokenMinted[_tokenId], "Token already minted");
-        require(verifier.verify(merkleRoot, _proof, _tokenId, _attributes), "Invalid proof");
-
-        tokenMinted[_tokenId] = true;
-        attributes[_tokenId] = _attributes;
-        _safeMint(msg.sender, _tokenId);
-        emit Minted(msg.sender, _tokenId);
+    function mint(uint256 _attributes, bytes32[] calldata _proof) external payable nonReentrant {
+        require(msg.value == mintPrice, "Incorrect payment sent");
+        require(!tokenMinted[_shipIdToMint], "Token already minted");
+        require(verifier.verify(merkleRoot, _proof, _shipIdToMint, _attributes), "Invalid proof");
+        tokenMinted[_shipIdToMint] = true;
+        attributes[_shipIdToMint] = _attributes;
+        _safeMint(msg.sender, _shipIdToMint);
+        emit Minted(msg.sender, _shipIdToMint);
+        _shipIdToMint += 1;
     }
 
     // The following functions are overrides required by Solidity.
