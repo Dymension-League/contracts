@@ -75,7 +75,7 @@ contract GameLeagueTest is Test {
 
     function testInitializeLeague(uint256 _prizePool) public {
         _prizePool = bound(_prizePool, 10 ^ 18, 10 ^ 23);
-        vm.deal(deployer, (_prizePool + 10 * 10) ^ 18);
+        vm.deal(deployer, _prizePool + 10 ether);
 
         // Initially, we should be able to start a league
         vm.prank(deployer);
