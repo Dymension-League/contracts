@@ -11,10 +11,9 @@ import "./IAttributeVerifier.sol";
 contract CosmoShips is ERC721, AccessControl, ReentrancyGuard, AttributeEncoder, ERC721Enumerable {
     bytes32 public constant MAINTENANCE_ROLE = keccak256("MAINTENANCE_ROLE");
     bytes32 public merkleRoot;
-    uint256 private _shipIdToMint;
+    uint256 public nextTokenIdToMint;
     uint256 public mintPrice;
     IAttributeVerifier public verifier;
-    mapping(uint256 => bool) public tokenMinted;
     mapping(uint256 => uint256) public attributes;
 
     event Minted(address minter, uint256 tokenId);
@@ -33,7 +32,7 @@ contract CosmoShips is ERC721, AccessControl, ReentrancyGuard, AttributeEncoder,
         if (_initialShipIdToMint <= 0) {
             _initialShipIdToMint = 1;
         }
-        _shipIdToMint = _initialShipIdToMint;
+        nextTokenIdToMint = _initialShipIdToMint;
     }
 
     function updateMerkleRoot(bytes32 _newRoot) external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -50,17 +49,15 @@ contract CosmoShips is ERC721, AccessControl, ReentrancyGuard, AttributeEncoder,
 
     function mint(uint256 _attributes, bytes32[] calldata _proof) external payable nonReentrant {
         require(msg.value == mintPrice, "Incorrect payment sent");
-        require(!tokenMinted[_shipIdToMint], "Token already minted");
-        require(verifier.verify(merkleRoot, _proof, _shipIdToMint, _attributes), "Invalid proof");
-        tokenMinted[_shipIdToMint] = true;
-        attributes[_shipIdToMint] = _attributes;
-        _safeMint(msg.sender, _shipIdToMint);
-        emit Minted(msg.sender, _shipIdToMint);
-        _shipIdToMint += 1;
+        require(verifier.verify(merkleRoot, _proof, nextTokenIdToMint, _attributes), "Invalid proof");
+        attributes[nextTokenIdToMint] = _attributes;
+        _safeMint(msg.sender, nextTokenIdToMint);
+        emit Minted(msg.sender, nextTokenIdToMint);
+        nextTokenIdToMint += 1;
     }
 
     function getCurrentTokenIdToMint() public view returns (uint256) {
-        return _shipIdToMint;
+        return nextTokenIdToMint;
     }
 
     function batchMint(uint256[] calldata _attributes, bytes32[][] calldata _proofs, uint256 _count)
@@ -72,14 +69,12 @@ contract CosmoShips is ERC721, AccessControl, ReentrancyGuard, AttributeEncoder,
         require(msg.value == mintPrice * _count, "Incorrect payment sent");
 
         for (uint256 i = 0; i < _count; i++) {
-            require(!tokenMinted[_shipIdToMint], "Token already minted");
-            require(verifier.verify(merkleRoot, _proofs[i], _shipIdToMint, _attributes[i]), "Invalid proof");
+            require(verifier.verify(merkleRoot, _proofs[i], nextTokenIdToMint, _attributes[i]), "Invalid proof");
 
-            tokenMinted[_shipIdToMint] = true;
-            attributes[_shipIdToMint] = _attributes[i];
-            _safeMint(msg.sender, _shipIdToMint);
-            emit Minted(msg.sender, _shipIdToMint);
-            _shipIdToMint++;
+            attributes[nextTokenIdToMint] = _attributes[i];
+            _safeMint(msg.sender, nextTokenIdToMint);
+            emit Minted(msg.sender, nextTokenIdToMint);
+            nextTokenIdToMint++;
         }
     }
 

@@ -47,7 +47,6 @@ contract CosmoShipsTest is Test {
         vm.prank(user);
         testNft.mint{value: 1 ether}(attributes, proof);
 
-        assertTrue(testNft.tokenMinted(tokenId), "Token 1 should be marked as minted");
         assertEq(testNft.ownerOf(tokenId), user, "Owner is not correctly assigned");
         assertEq(testNft.attributes(tokenId), attributes, "Attributes not correctly set");
         tokenId = 2;
@@ -56,7 +55,6 @@ contract CosmoShipsTest is Test {
         proof[1] = t_proof[3];
         vm.prank(user);
         testNft.mint{value: 1 ether}(attributes, proof);
-        assertTrue(testNft.tokenMinted(tokenId), "Token 2 should be marked as minted");
         assertEq(testNft.ownerOf(tokenId), user, "Owner is not correctly assigned");
         assertEq(testNft.attributes(tokenId), attributes, "Attributes not correctly set");
     }

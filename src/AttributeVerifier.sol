@@ -2,8 +2,9 @@
 pragma solidity ^0.8.4;
 
 import "openzeppelin-contracts/contracts/utils/cryptography/MerkleProof.sol";
+import "./IAttributeVerifier.sol";
 
-contract AttributeVerifier {
+contract AttributeVerifier is IAttributeVerifier {
     function verify(bytes32 root, bytes32[] calldata proof, uint256 tokenId, uint256 encodedAttributes)
         public
         pure
