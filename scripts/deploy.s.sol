@@ -8,9 +8,7 @@ import "../src/AttributeVerifier.sol";
 import "../src/RandomNumberGenerator.sol";
 
 contract Deploy is Script {
-    function run() external {
-        uint256 mintPrice = 1_000_000_000_000;
-        bytes32 merkleRoot = keccak256(bytes.concat(keccak256(abi.encodePacked("0", "1096"))));
+    function run(bytes32 merkleRoot, uint256 mintPrice) external {
         vm.startBroadcast();
 
         IAttributeVerifier verifier = new AttributeVerifier();

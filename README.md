@@ -57,7 +57,7 @@ avril
 Then, open a new terminal and type:
 
 ```shell
-forge script scripts/local-deploy.sol --rpc-url 127.0.0.1:8545 --broadcast --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
+forge script -s="run(bytes32, uint256)" --rpc-url 127.0.0.1:8545 --broadcast --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 --no-cache scripts/deploy.s.sol 0x1 1000000000000
 ```
 
 Note that the address, is provided by `avril`. In case you need to provide another one, change `LOCAL_PRIVATE_KEY`.

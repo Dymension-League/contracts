@@ -56,10 +56,6 @@ contract CosmoShips is ERC721, AccessControl, ReentrancyGuard, AttributeEncoder,
         nextTokenIdToMint += 1;
     }
 
-    function getCurrentTokenIdToMint() public view returns (uint256) {
-        return nextTokenIdToMint;
-    }
-
     function batchMint(uint256[] calldata _attributes, bytes32[][] calldata _proofs, uint256 _count)
         external
         payable
@@ -74,7 +70,7 @@ contract CosmoShips is ERC721, AccessControl, ReentrancyGuard, AttributeEncoder,
             attributes[nextTokenIdToMint] = _attributes[i];
             _safeMint(msg.sender, nextTokenIdToMint);
             emit Minted(msg.sender, nextTokenIdToMint);
-            nextTokenIdToMint++;
+            nextTokenIdToMint += 1;
         }
     }
 
