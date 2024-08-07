@@ -9,15 +9,15 @@ import "./fixtures/mockVerifier.sol";
 contract CosmoShipsTest is Test {
     CosmoShips nft;
     address deployer;
-    AttributeVerifier verifier;
+    IAttributeVerifier verifier;
     address user = address(0x1);
     bytes32 initialMerkleRoot = bytes32(0xd67e5a7bb77ee4c5e38947df0fd5fd577eb7bd77d03d8e86b4b6adf3c0ad4bc2);
+
     uint256 initialMintPrice = 1 ether;
 
     function setUp() public {
         deployer = address(this);
-        verifier = new AttributeVerifier();
-
+        verifier = new mockVerifier();
         nft = new CosmoShips(initialMerkleRoot, 0, initialMintPrice, deployer, address(verifier));
     }
 
@@ -28,35 +28,43 @@ contract CosmoShipsTest is Test {
     }
 
     function testMintingFunctionality() public {
-        IAttributeVerifier nftVerifier = new mockVerifier();
-        uint256 tokenId = 1;
-        CosmoShips testNft = new CosmoShips("0x1", tokenId, 1 ether, address(this), address(nftVerifier));
-
         uint256 attributes = 1096;
+        uint256 tokenId = 1;
         bytes32[4] memory t_proof = [
             bytes32(0xedc01e4d375758c57a25a6e5095e5ab59d5c2d87eb305682190981234d81175e),
             0x1938d33112841f5ee65081f55d342198ab4a089d74cefcd0e7c616d43aad8c6d,
-            bytes32(0xedc01e4d375758c57a25a6e5095e5ab59d5c2d87eb305682190981234d81175b),
-            0x1938d33112841f5ee65081f55d342198ab4a089d74cefcd0e7c616d43aad8c6c
+            0x1938d33112841f5ee65081f55d342198ab4a089d74cefcd0e7c616d43aad8c63,
+            0x1938d33112841f5ee65081f55d342198ab4a089d74cefcd0e7c616d43aad8c73
         ];
-        bytes32[] memory proof = new bytes32[](2);
+        bytes32[] memory proof = new bytes32[](4);
         proof[0] = t_proof[0];
         proof[1] = t_proof[1];
+        proof[2] = t_proof[2];
+        proof[3] = t_proof[3];
 
         vm.deal(user, 2 ether); // Provide ETH to user
         vm.prank(user);
-        testNft.mint{value: 1 ether}(attributes, proof);
+        nft.mint{value: 1 ether}(attributes, proof);
 
-        assertEq(testNft.ownerOf(tokenId), user, "Owner is not correctly assigned");
-        assertEq(testNft.attributes(tokenId), attributes, "Attributes not correctly set");
+        assertEq(nft.ownerOf(tokenId), user, "Owner is not correctly assigned");
+        assertEq(nft.attributes(tokenId), attributes, "Attributes not correctly set");
+        assertEq(nft.nextTokenIdToMint(), tokenId + 1, "Next token is not correct");
         tokenId = 2;
-
-        proof[0] = t_proof[2];
-        proof[1] = t_proof[3];
+        uint256 attributes2 = 1000;
+        bytes32[2] memory t_proof2 = [
+            bytes32(0xedc01e4d375758c57a25a6e5095e5ab59d5c2d87eb305682190981234d81175e),
+            0x1938d13112841f5ee65081f55d342198ab4a089d74cefcd0e7c616d43aad8c6d
+        ];
+        bytes32[] memory proof2 = new bytes32[](2);
+        proof2[0] = t_proof2[0];
+        proof2[1] = t_proof2[1];
+        vm.deal(user, 2 ether); // Provide ETH to user
         vm.prank(user);
-        testNft.mint{value: 1 ether}(attributes, proof);
-        assertEq(testNft.ownerOf(tokenId), user, "Owner is not correctly assigned");
-        assertEq(testNft.attributes(tokenId), attributes, "Attributes not correctly set");
+        nft.mint{value: 1 ether}(attributes2, proof2);
+
+        assertEq(nft.ownerOf(tokenId), user, "Owner is not correctly assigned");
+        assertEq(nft.nextTokenIdToMint(), tokenId + 1, "Next token is not correct");
+        assertEq(nft.attributes(tokenId), attributes2, "Attributes not correctly set");
     }
 
     function testFail_MintWithoutPayment() public {
