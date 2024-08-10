@@ -7,6 +7,7 @@ import "../src/GameLeague.sol";
 import "../src/IAttributeVerifier.sol";
 import "./fixtures/mockVerifier.sol";
 import "./fixtures/mockRandomGenerator.sol";
+import "forge-std/console.sol";
 
 contract GameLeagueTest is Test {
     GameLeague gameLeague;
@@ -16,6 +17,24 @@ contract GameLeagueTest is Test {
     address deployer;
     bytes32[] proof;
     uint256 constant mintPrice = 1;
+
+    address alice = address(0x1);
+    uint256[] aliceAttrs = new uint256[](3);
+
+    address bob = address(0x2);
+    uint256[] bobAttrs = new uint256[](3);
+
+    address carol = address(0x3);
+    uint256[] carolAttrs = new uint256[](3);
+
+    address jane = address(0x4);
+    uint256[] janeAttrs = new uint256[](3);
+
+    address george = address(0x5);
+    uint256[] georgeAttrs = new uint256[](3);
+
+    address tony = address(0x6);
+    uint256[] tonyAttrs = new uint256[](3);
 
     function setUp() public {
         deployer = address(this);
@@ -27,10 +46,63 @@ contract GameLeagueTest is Test {
         // mock proof to pass signature requirement
         proof = new bytes32[](1);
         proof[0] = bytes32(0xabcdef1234560000000000000000000000000000000000000000000000000000);
+
+        aliceAttrs[0] = 1096;
+        aliceAttrs[1] = 9768;
+        aliceAttrs[2] = 17000;
+
+        carolAttrs[0] = 17442;
+        carolAttrs[1] = 18532;
+        carolAttrs[2] = 16936;
+
+        bobAttrs[0] = 1096;
+        bobAttrs[1] = 9768;
+        bobAttrs[2] = 17000;
+
+        janeAttrs[0] = 1096;
+        janeAttrs[1] = 9768;
+        janeAttrs[2] = 17000;
+
+        georgeAttrs[0] = 1096;
+        georgeAttrs[1] = 9768;
+        georgeAttrs[2] = 17000;
+
+        tonyAttrs[0] = 1096;
+        tonyAttrs[1] = 9768;
+        tonyAttrs[2] = 17000;
         assert(address(gameLeague) != address(0));
     }
 
+    function setupTeamAndEnroll(address user, uint256[] memory attrs, string memory teamName)
+        internal
+        returns (uint256, uint256[] memory)
+    {
+        vm.deal(user, 3 * mintPrice + 100 ether); // Ensure user has enough ether
+        uint256[] memory ids = mintToken(user, attrs); // Mint tokens for the user
+        vm.startPrank(user);
+        cosmoShips.setApprovalForAll(address(gameLeague), true); // Set approval for all tokens
+        uint256 teamId = gameLeague.createTeam(ids, teamName); // Create the team
+        gameLeague.enrollToLeague(teamId); // Enroll the team to the league
+        vm.stopPrank();
+
+        return (teamId, ids);
+    }
+
+    function mintToken(address recipient, uint256[] memory attributes) internal returns (uint256[] memory) {
+        uint256[] memory ids = new uint256[](attributes.length);
+        for (uint256 i = 0; i < attributes.length; i++) {
+            vm.startPrank(recipient);
+            uint256 currentTokenId = cosmoShips.nextTokenIdToMint();
+            cosmoShips.mint{value: mintPrice}(attributes[i], proof);
+            vm.stopPrank();
+            ids[i] = currentTokenId;
+            assertEq(cosmoShips.ownerOf(currentTokenId), recipient, "NFT not minted to correct address");
+        }
+        return ids;
+    }
+
     function testCreateTeam(string memory teamName, bool approveAll) public {
+        console.log("Running testCreateTeam");
         address user = address(0x1);
         vm.deal(user, 10 ^ 18);
 
@@ -74,64 +146,41 @@ contract GameLeagueTest is Test {
     }
 
     function testInitializeLeague(uint256 _prizePool) public {
-        _prizePool = bound(_prizePool, 10 ^ 18, 10 ^ 23);
-        vm.deal(deployer, _prizePool + 10 ether);
+        console.log("Running testInitializeLeague");
+        _prizePool = bound(_prizePool, 1 ether, 100000 ether);
+        vm.deal(deployer, _prizePool * 2);
 
         // Initially, we should be able to start a league
         vm.prank(deployer);
         gameLeague.initializeLeague{value: _prizePool}();
-        (, GameLeague.LeagueState state,,,) = gameLeague.getLeague(1);
+        // Check if the league state is correct after initialization
+        (, GameLeague.LeagueState state,,,) = gameLeague.getLeague(gameLeague.currentLeagueId());
         assertEq(uint256(state), uint256(GameLeague.LeagueState.Initiated));
 
         // Expect revert on trying to initialize another league when one is active
-        vm.expectRevert("Previous league not concluded");
+        vm.expectRevert(bytes("Previous league not concluded"));
         gameLeague.initializeLeague{value: _prizePool}();
         vm.stopPrank();
     }
 
-    function tokenMint(address recipient, uint256[] memory tokenIds, uint256[] memory attributes) internal {
-        require(tokenIds.length == attributes.length, "Token IDs and attributes length mismatch");
-        for (uint256 i = 0; i < tokenIds.length; i++) {
-            vm.prank(recipient);
-            cosmoShips.mint{value: mintPrice}(attributes[i], proof);
-            assertEq(cosmoShips.attributes(tokenIds[i]), attributes[i], "Attributes not correctly set");
-        }
-    }
-
     function testEnrollToLeague() public {
+        console.log("Running testEnrollToLeague");
         vm.deal(deployer, 2 ether);
         vm.prank(deployer);
         gameLeague.initializeLeague{value: 1 ether}();
-
-        // mint some tokens to user so that it can create a team
-        address user = address(0x1);
-        vm.deal(user, (3 * mintPrice + 100) ^ 18);
-        uint256[] memory ids = new uint256[](3);
-        uint256[] memory attrs = new uint256[](3);
-        ids[0] = 1;
-        ids[1] = 2;
-        ids[2] = 3;
-        attrs[0] = 1096;
-        attrs[1] = 9768;
-        attrs[2] = 17000;
-        tokenMint(user, ids, attrs);
-
-        vm.startPrank(user);
-        cosmoShips.setApprovalForAll(address(gameLeague), true);
-        // create a team
-        uint256 teamId = gameLeague.createTeam(ids, "Team-A");
-        // enroll team to league
-        gameLeague.enrollToLeague(teamId);
-        vm.stopPrank();
-
+        (uint256 teamId,) = setupTeamAndEnroll(bob, bobAttrs, "team-a");
         // Check if the team was enrolled
         assertTrue(gameLeague.isTeamEnrolled(teamId, gameLeague.currentLeagueId()));
     }
 
     function testEndEnrollmentAndStartBetting() public {
+        console.log("Running testEndEnrollmentAndStartBetting");
         // Setup: Assume leagueId of 1 and it is currently in the Enrollment state
         gameLeague.initializeLeague{value: 1 ether}();
         uint256 leagueId = gameLeague.currentLeagueId();
+        // Setup teams
+        setupTeamAndEnroll(alice, aliceAttrs, "Team-Alice");
+        setupTeamAndEnroll(bob, bobAttrs, "Team-Bob");
 
         // Test transition to Betting state
         gameLeague.endEnrollmentAndStartBetting();
@@ -146,32 +195,17 @@ contract GameLeagueTest is Test {
     }
 
     function testBetPlacing() public {
+        console.log("Running testBetPlacing");
         gameLeague.initializeLeague{value: 1 ether}();
         uint256 leagueId = gameLeague.currentLeagueId();
-
-        address alice = address(0x1);
-        address bob = address(0x2);
-        address carol = address(0x3);
-
-        // mint some tokens to user so that it can create a team
-        vm.deal(carol, 3 * mintPrice + 100 ** 18);
-        uint256[] memory ids = new uint256[](3);
-        uint256[] memory attrs = new uint256[](3);
-        ids[0] = 1;
-        ids[1] = 2;
-        ids[2] = 3;
-        attrs[0] = 1096;
-        attrs[1] = 9768;
-        attrs[2] = 17000;
-        tokenMint(carol, ids, attrs);
-
-        vm.startPrank(carol);
-        cosmoShips.setApprovalForAll(address(gameLeague), true);
-        // create a team
-        uint256 teamId = gameLeague.createTeam(ids, "Team-A");
-        // enroll team to league
-        gameLeague.enrollToLeague(teamId);
-        vm.stopPrank();
+        // Team bob
+        (uint256 teamId,) = setupTeamAndEnroll(bob, bobAttrs, "Team-Bob");
+        // Team alice
+        setupTeamAndEnroll(alice, aliceAttrs, "Team-Alice");
+        // Team carol
+        setupTeamAndEnroll(carol, carolAttrs, "Team-Carol");
+        // Team jane
+        setupTeamAndEnroll(jane, janeAttrs, "Team-Jane");
 
         gameLeague.endEnrollmentAndStartBetting();
 
@@ -179,7 +213,7 @@ contract GameLeagueTest is Test {
         uint256 betAmountAlice = 1 ether;
         vm.deal(alice, betAmountAlice);
         vm.startPrank(alice);
-        gameLeague.placeBet(leagueId, teamId, betAmountAlice);
+        gameLeague.placeBet(gameLeague.currentLeagueId(), teamId, betAmountAlice);
         (uint256[] memory betTeamIdsAlice, uint256[] memory betAmountsAlice) = gameLeague.getUserBets(leagueId, alice);
         assertEq(betTeamIdsAlice[0], teamId, "Alice's Team ID should match");
         assertEq(betAmountsAlice[0], betAmountAlice, "Alice's bet amount should match");
@@ -205,9 +239,13 @@ contract GameLeagueTest is Test {
         );
     }
 
-    function testEndBettingAndStartGames() public {
+    function testEndBettingAndStartGame() public {
         gameLeague.initializeLeague{value: 1 ether}();
         uint256 leagueId = gameLeague.currentLeagueId();
+
+        // Setup teams
+        setupTeamAndEnroll(alice, aliceAttrs, "Team-Alice");
+        setupTeamAndEnroll(bob, bobAttrs, "Team-Bob");
 
         // Test transition to Betting state
         gameLeague.endEnrollmentAndStartBetting();
@@ -225,62 +263,79 @@ contract GameLeagueTest is Test {
     }
 
     function testMatchSetupAndOutcome() public {
+        console.log("Running testMatchSetupAndOutcome");
         // Initialize league
         gameLeague.initializeLeague{value: 1 ether}();
         uint256 leagueId = gameLeague.currentLeagueId();
-        uint256 seed = 1;
 
         // Setup teams
-        // temp variables
-        uint256[] memory ids = new uint256[](3);
-        uint256[] memory attrs = new uint256[](3);
-        // Team alice
-        address alice = address(0x1);
-        ids[0] = 1;
-        ids[1] = 2;
-        ids[2] = 3;
-        attrs[0] = 1096;
-        attrs[1] = 9768;
-        attrs[2] = 17000;
-        setupTeamAndEnroll(alice, ids, attrs, "Team-Alice");
-        // end Team alice
+        setupTeamAndEnroll(alice, aliceAttrs, "Team-Alice");
+        setupTeamAndEnroll(bob, bobAttrs, "Team-Bob");
+        setupTeamAndEnroll(carol, carolAttrs, "Team-Carol");
+        setupTeamAndEnroll(jane, janeAttrs, "Team-Jane");
 
-        // Team bob
-        address bob = address(0x2);
-        ids[0] = 4;
-        ids[1] = 5;
-        ids[2] = 6;
-        attrs[0] = 17442;
-        attrs[1] = 18532;
-        attrs[2] = 16936;
-        setupTeamAndEnroll(bob, ids, attrs, "Team-Bob");
-        // end Team bob
-
-        // // Start betting period and then games
         gameLeague.endEnrollmentAndStartBetting();
-        gameLeague.setupMatches(seed);
+        gameLeague.setupMatches(1);
 
         // Retrieve and assert the state of the league after setting up matches
         (, GameLeague.LeagueState state,, uint256[] memory enrolledTeams,) = gameLeague.getLeague(leagueId);
         assertEq(uint256(state), uint256(GameLeague.LeagueState.BetsOpen));
         assertTrue(enrolledTeams.length >= 2);
 
-        // TODO: complete the test
+        // Check the match outcome
+        gameLeague.determineMatchOutcome(gameLeague.currentLeagueId(), 0);
+        (, uint256 team1, uint256 team2, uint256 winner,) = gameLeague.getMatch(leagueId, 0);
+        assertTrue(winner == team1 || winner == team2);
     }
 
-    function setupTeamAndEnroll(address user, uint256[] memory ids, uint256[] memory attrs, string memory teamName)
-        public
-        returns (uint256)
-    {
-        vm.deal(user, 3 * mintPrice + 100 ether); // Ensure user has enough ether
-        tokenMint(user, ids, attrs); // Mint tokens for the user
+    function testSetupMatches() public {
+        // Setup league and enroll teams
+        gameLeague.initializeLeague{value: 1 ether}();
+        uint256 leagueId = gameLeague.currentLeagueId();
+        setupTeamAndEnroll(alice, aliceAttrs, "Team-Alice");
+        setupTeamAndEnroll(bob, bobAttrs, "Team-Bob");
+        setupTeamAndEnroll(carol, carolAttrs, "Team-Carol");
+        setupTeamAndEnroll(jane, janeAttrs, "Team-Jane");
 
-        vm.startPrank(user);
-        cosmoShips.setApprovalForAll(address(gameLeague), true); // Set approval for all tokens
-        uint256 teamId = gameLeague.createTeam(ids, teamName); // Create the team
-        gameLeague.enrollToLeague(teamId); // Enroll the team to the league
-        vm.stopPrank();
+        gameLeague.endEnrollmentAndStartBetting();
+        gameLeague.setupMatches(gameLeague.currentLeagueId());
 
-        return teamId;
+        // Verify correct number of matches created
+        (,,, uint256[] memory enrolledTeams,) = gameLeague.getLeague(leagueId);
+        uint256 expectedMatches = enrolledTeams.length / 2;
+
+        for (uint256 i = 0; i < expectedMatches; i++) {
+            (uint256 gameId, uint256 team1, uint256 team2, uint256 winner, GameLeague.GameType gameType) =
+                gameLeague.getMatch(leagueId, i);
+            assertEq(gameId, i, "Incorrect game ID");
+            assertTrue(team1 != team2, "Teams should be different");
+            assertEq(winner, 0, "Winner should not be set yet");
+            assertTrue(
+                gameType == GameLeague.GameType.Racing || gameType == GameLeague.GameType.Battle, "Invalid game type"
+            );
+        }
+    }
+
+    function testRunGameLeague() public {
+        gameLeague.initializeLeague{value: 1 ether}();
+        gameLeague.currentLeagueId();
+        setupTeamAndEnroll(alice, aliceAttrs, "Team-Alice");
+        setupTeamAndEnroll(bob, bobAttrs, "Team-Bob");
+        setupTeamAndEnroll(carol, carolAttrs, "Team-Carol");
+        setupTeamAndEnroll(jane, janeAttrs, "Team-Jane");
+        setupTeamAndEnroll(george, georgeAttrs, "Team-George");
+        setupTeamAndEnroll(tony, tonyAttrs, "Team-Tony");
+
+        gameLeague.endEnrollmentAndStartBetting();
+        gameLeague.endBettingAndStartGame();
+        gameLeague.runGameLeague();
+
+        // Verify league state
+        (, GameLeague.LeagueState state,,,) = gameLeague.getLeague(gameLeague.currentLeagueId());
+        assertEq(uint256(state), uint256(GameLeague.LeagueState.Concluded), "League should be concluded");
+
+        // Verify correct number of teams remaining
+        (uint256[] memory remainingTeams,,) = gameLeague.getEnrolledTeams();
+        assertEq(remainingTeams.length, 2, "Should have 2 teams remaining");
     }
 }

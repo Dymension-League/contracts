@@ -5,6 +5,7 @@ import "openzeppelin-contracts/contracts/token/ERC721/utils/ERC721Holder.sol";
 import "openzeppelin-contracts/contracts/utils/Counters.sol";
 import "./CosmoShips.sol";
 import "./IRandomNumberGenerator.sol";
+import "forge-std/console.sol";
 
 contract GameLeague is ERC721Holder {
     using Counters for Counters.Counter;
@@ -157,6 +158,15 @@ contract GameLeague is ERC721Holder {
         return (league.id, league.state, league.prizePool, league.enrolledTeams, league.totalBetsInLeague);
     }
 
+    function getMatch(uint256 leagueId, uint256 matchId)
+        external
+        view
+        returns (uint256 id, uint256 team1, uint256 team2, uint256 winner, GameType gameType)
+    {
+        Game storage game = leagues[leagueId].games[matchId];
+        return (game.id, game.team1, game.team2, game.winner, game.gameType);
+    }
+
     function enrollToLeague(uint256 teamId) external {
         require(leagues[currentLeagueId].state == LeagueState.Initiated, "Enrollment is closed");
         (,, address retrievedOwner) = getTeam(teamId);
@@ -173,6 +183,8 @@ contract GameLeague is ERC721Holder {
     function endEnrollmentAndStartBetting() external {
         uint256 leagueId = currentLeagueId;
         League storage league = leagues[leagueId];
+        uint256 numTeams = league.enrolledTeams.length;
+        require(numTeams >= 2 && (numTeams & (numTeams % 2)) == 0, "Number of teams must be a power of 2.");
         require(league.state == LeagueState.Initiated, "League is not in enrollment state");
         league.state = LeagueState.BetsOpen;
     }
@@ -180,6 +192,7 @@ contract GameLeague is ERC721Holder {
     function placeBet(uint256 leagueId, uint256 teamId, uint256 amount) external {
         League storage league = leagues[leagueId];
         require(league.state == LeagueState.BetsOpen, "Betting is not active");
+        require(amount > 0, "Bet amount must be greater than 0");
         require(league.teamsMap[teamId], "Team does not exist in this league");
 
         // If it's the first bet on this team by the user for this league, add to the list
@@ -234,9 +247,12 @@ contract GameLeague is ERC721Holder {
     function setupMatches(uint256 seed) public {
         uint256 leagueId = currentLeagueId;
         League storage league = leagues[leagueId];
-        require(league.state == LeagueState.BetsOpen, "Matches can only be set up in the Bets Open state.");
+        require(
+            league.state == LeagueState.BetsOpen || league.state == LeagueState.Running,
+            "Invalid league state for setting up matches"
+        );
         uint256 numTeams = league.enrolledTeams.length;
-        require(numTeams >= 2, "At least two teams needed for matches.");
+        require(numTeams >= 2, "Not enough teams to set up matches");
 
         uint256[] memory gameIds = new uint256[](numTeams / 2);
         uint256[] memory team1s = new uint256[](numTeams / 2);
@@ -290,23 +306,30 @@ contract GameLeague is ERC721Holder {
             team2Score += randomness % 20;
         }
 
-        game.winner = team1Score > team2Score ? game.team1 : game.team2;
+        if (team1Score > team2Score) {
+            game.winner = game.team1;
+        } else if (team2Score > team1Score) {
+            game.winner = game.team2;
+        } else {
+            // In case of a tie, the team with the lower ID wins
+            game.winner = game.team1 < game.team2 ? game.team1 : game.team2;
+        }
     }
 
     function calculateTeamScore(uint256 teamId, GameType gameType) internal view returns (uint256) {
         Team storage team = teams[teamId];
         uint256 score = 0;
-        for (uint256 i = 0; i < team.nftIds.length; i++) {
-            // TODO: add here a calculation according the team attributes and game type
+        require(team.nftIds.length == 3, "Each team must have exactly 3 NFTs.");
+        for (uint256 i = 0; i < 3; i++) {
             uint256 attributes = cosmoShips.attributes(team.nftIds[i]);
             (, uint256 attack, uint256 speed, uint256 shield) = cosmoShips.decodeAttributes(attributes);
             if (gameType == GameType.Battle) {
-                score = attack + shield;
+                score += attack + shield;
             } else if (gameType == GameType.Racing) {
-                score = speed;
+                score += speed;
             }
         }
-        return score;
+        return score > 100 ? 100 : score;
     }
 
     function runGameLeague() external {
@@ -319,13 +342,13 @@ contract GameLeague is ERC721Holder {
             // Setup matches for this turn
             setupMatches(league.gameIdCounter.current());
 
-            // Reset counter for the next round
-            league.gameIdCounter.reset();
-
             // Run the games for this turn
             for (uint256 gameId = 0; gameId < league.gameIdCounter.current(); gameId++) {
                 determineMatchOutcome(leagueId, gameId);
             }
+
+            // Reset counter for the next round
+            league.gameIdCounter.reset();
 
             // Emit leaderboard and eliminate lowest-scoring teams
             emitLeaderboard(leagueId);
@@ -343,7 +366,7 @@ contract GameLeague is ERC721Holder {
         quickSortTeams(league.enrolledTeams, 0, int256(numTeams) - 1, leagueId);
 
         // Emit leaderboard
-        uint256[] memory leaderboard;
+        uint256[] memory leaderboard = new uint256[](numTeams);
         for (uint256 i = 0; i < numTeams; i++) {
             leaderboard[i] = league.enrolledTeams[i];
         }
@@ -354,22 +377,30 @@ contract GameLeague is ERC721Holder {
         League storage league = leagues[leagueId];
         uint256 numTeams = league.enrolledTeams.length;
 
-        // Ensure an even number of teams for the next round
-        if (numTeams % 2 != 0) {
-            // Remove the last team
-            uint256 lastTeamId = league.enrolledTeams[numTeams - 1];
-            for (uint256 j = 0; j < teams[lastTeamId].nftIds.length; j++) {
-                cosmoShips.transferFrom(address(this), teams[lastTeamId].owner, teams[lastTeamId].nftIds[j]);
-            }
-            delete league.teamsMap[lastTeamId];
-            numTeams--;
+        if (numTeams <= 4) {
+            return; // Don't eliminate if we're down to the final 4 teams
+        }
+
+        uint256 teamsToKeep = numTeams / 2;
+        if (teamsToKeep % 2 != 0) {
+            teamsToKeep--; // Ensure we keep an even number of teams
         }
 
         // Create a new array to keep only the top teams
-        uint256[] memory remainingTeams = new uint256[](numTeams / 2);
-        for (uint256 i = 0; i < remainingTeams.length; i++) {
+        uint256[] memory remainingTeams = new uint256[](teamsToKeep);
+        for (uint256 i = 0; i < teamsToKeep; i++) {
             remainingTeams[i] = league.enrolledTeams[i];
         }
+
+        // Remove eliminated teams
+        for (uint256 i = teamsToKeep; i < numTeams; i++) {
+            uint256 teamId = league.enrolledTeams[i];
+            for (uint256 j = 0; j < teams[teamId].nftIds.length; j++) {
+                cosmoShips.transferFrom(address(this), teams[teamId].owner, teams[teamId].nftIds[j]);
+            }
+            delete league.teamsMap[teamId];
+        }
+
         league.enrolledTeams = remainingTeams;
     }
 
