@@ -5,18 +5,8 @@ import "forge-std/Test.sol";
 import "../src/CosmoShips.sol";
 import "../src/GameLeague.sol";
 import "../src/IAttributeVerifier.sol";
-
-contract mockVerifier is IAttributeVerifier {
-    function verify(bytes32, bytes32[] calldata, uint256, uint256) public pure returns (bool) {
-        return true;
-    }
-}
-
-contract MockRandomNumberGenerator is IRandomNumberGenerator {
-    function getRandomNumber(uint256 _seed) external view override returns (uint256) {
-        return _seed;
-    }
-}
+import "./fixtures/mockVerifier.sol";
+import "./fixtures/mockRandomGenerator.sol";
 
 contract GameLeagueTest is Test {
     GameLeague gameLeague;
@@ -30,7 +20,7 @@ contract GameLeagueTest is Test {
     function setUp() public {
         deployer = address(this);
         verifier = new mockVerifier();
-        cosmoShips = new CosmoShips("0x1", mintPrice, address(this), address(verifier));
+        cosmoShips = new CosmoShips("0x1", 0, mintPrice, address(this), address(verifier));
         mockRNG = new MockRandomNumberGenerator();
         gameLeague = new GameLeague(address(cosmoShips), address(mockRNG));
 
@@ -46,9 +36,9 @@ contract GameLeagueTest is Test {
 
         vm.startPrank(user);
         // Mint some tokens
-        cosmoShips.mint{value: mintPrice}(1, 1096, proof);
-        cosmoShips.mint{value: mintPrice}(2, 1096, proof);
-        cosmoShips.mint{value: mintPrice}(3, 1096, proof);
+        cosmoShips.mint{value: mintPrice}(1096, proof);
+        cosmoShips.mint{value: mintPrice}(1096, proof);
+        cosmoShips.mint{value: mintPrice}(1096, proof);
 
         // Approve the GameLeague contract to take NFTs
         // Approval can be one by one or for all at once
@@ -85,7 +75,7 @@ contract GameLeagueTest is Test {
 
     function testInitializeLeague(uint256 _prizePool) public {
         _prizePool = bound(_prizePool, 10 ^ 18, 10 ^ 23);
-        vm.deal(deployer, _prizePool + 10 * 10 ^ 18);
+        vm.deal(deployer, _prizePool + 10 ether);
 
         // Initially, we should be able to start a league
         vm.prank(deployer);
@@ -103,7 +93,8 @@ contract GameLeagueTest is Test {
         require(tokenIds.length == attributes.length, "Token IDs and attributes length mismatch");
         for (uint256 i = 0; i < tokenIds.length; i++) {
             vm.prank(recipient);
-            cosmoShips.mint{value: mintPrice}(tokenIds[i], attributes[i], proof);
+            cosmoShips.mint{value: mintPrice}(attributes[i], proof);
+            assertEq(cosmoShips.attributes(tokenIds[i]), attributes[i], "Attributes not correctly set");
         }
     }
 
@@ -114,7 +105,7 @@ contract GameLeagueTest is Test {
 
         // mint some tokens to user so that it can create a team
         address user = address(0x1);
-        vm.deal(user, 3 * mintPrice + 100 ^ 18);
+        vm.deal(user, (3 * mintPrice + 100) ^ 18);
         uint256[] memory ids = new uint256[](3);
         uint256[] memory attrs = new uint256[](3);
         ids[0] = 1;
@@ -251,7 +242,7 @@ contract GameLeagueTest is Test {
         attrs[0] = 1096;
         attrs[1] = 9768;
         attrs[2] = 17000;
-        uint256 teamIdAlice = setupTeamAndEnroll(alice, ids, attrs, "Team-Alice");
+        setupTeamAndEnroll(alice, ids, attrs, "Team-Alice");
         // end Team alice
 
         // Team bob
@@ -262,7 +253,7 @@ contract GameLeagueTest is Test {
         attrs[0] = 17442;
         attrs[1] = 18532;
         attrs[2] = 16936;
-        uint256 teamIdBob = setupTeamAndEnroll(bob, ids, attrs, "Team-Bob");
+        setupTeamAndEnroll(bob, ids, attrs, "Team-Bob");
         // end Team bob
 
         // // Start betting period and then games
