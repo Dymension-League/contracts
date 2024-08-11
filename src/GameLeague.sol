@@ -14,7 +14,9 @@ contract GameLeague is ERC721Holder {
 
     Counters.Counter private teamsCounter;
 
-    event Leaderboard(uint256 indexed leagueId, uint256[] leaderboard);
+    event Leaderboard(
+        uint256 indexed leagueId, uint256[] teamIds, string[] teamNames, uint256[] totalScores, uint256[] gamesPlayed
+    );
     event GamesSetup(
         uint256 indexed leagueId, uint256[] gameIds, uint256[] team1s, uint256[] team2s, GameType[] gameTypes
     );
@@ -424,18 +426,43 @@ contract GameLeague is ERC721Holder {
     }
 
     function emitLeaderboard(uint256 leagueId) internal {
+        (
+            uint256[] memory teamIds,
+            string[] memory teamNames,
+            uint256[] memory totalScores,
+            uint256[] memory gamesPlayed
+        ) = getLeaderboard(leagueId);
+
+        emit Leaderboard(leagueId, teamIds, teamNames, totalScores, gamesPlayed);
+    }
+
+    function getLeaderboard(uint256 leagueId)
+        public
+        view
+        returns (
+            uint256[] memory teamIds,
+            string[] memory teamNames,
+            uint256[] memory totalScores,
+            uint256[] memory gamesPlayed
+        )
+    {
         League storage league = leagues[leagueId];
-        uint256 numTeams = league.enrolledTeams.length;
+        uint256 teamCount = league.enrolledTeams.length;
 
-        // Sort teams based on their scores
-        quickSortTeams(league.enrolledTeams, 0, int256(numTeams) - 1, leagueId);
+        teamIds = new uint256[](teamCount);
+        teamNames = new string[](teamCount);
+        totalScores = new uint256[](teamCount);
+        gamesPlayed = new uint256[](teamCount);
 
-        // Emit leaderboard
-        uint256[] memory leaderboard = new uint256[](numTeams);
-        for (uint256 i = 0; i < numTeams; i++) {
-            leaderboard[i] = league.enrolledTeams[i];
+        for (uint256 i = 0; i < teamCount; i++) {
+            uint256 teamId = league.enrolledTeams[i];
+            teamIds[i] = teamId;
+            teamNames[i] = teams[teamId].name;
+            totalScores[i] = league.teamTotalScore[teamId];
+            gamesPlayed[i] = league.teamGamesPlayed[teamId];
         }
-        emit Leaderboard(leagueId, leaderboard);
+
+        return (teamIds, teamNames, totalScores, gamesPlayed);
     }
 
     function eliminateLowestScoringTeams(uint256 leagueId) internal {
@@ -491,55 +518,6 @@ contract GameLeague is ERC721Holder {
         }
         if (left < j) quickSortTeams(arr, left, j, leagueId);
         if (i < right) quickSortTeams(arr, i, right, leagueId);
-    }
-
-    function getLeaderboard(uint256 leagueId)
-        public
-        view
-        returns (
-            uint256[] memory gameIds,
-            uint256[] memory team1s,
-            uint256[] memory team2s,
-            uint256[] memory winners,
-            uint256[] memory team1Scores,
-            uint256[] memory team2Scores,
-            uint256[] memory teamIds,
-            uint256[] memory totalScores,
-            uint256[] memory gamesPlayed
-        )
-    {
-        League storage league = leagues[leagueId];
-        uint256 totalGames = league.gameIdCounter.current();
-        uint256 totalTeams = league.enrolledTeams.length;
-
-        gameIds = new uint256[](totalGames);
-        team1s = new uint256[](totalGames);
-        team2s = new uint256[](totalGames);
-        winners = new uint256[](totalGames);
-        team1Scores = new uint256[](totalGames);
-        team2Scores = new uint256[](totalGames);
-        teamIds = new uint256[](totalTeams);
-        totalScores = new uint256[](totalTeams);
-        gamesPlayed = new uint256[](totalTeams);
-
-        for (uint256 i = 0; i < totalGames; i++) {
-            Game memory game = league.games[i];
-            gameIds[i] = game.id;
-            team1s[i] = game.team1;
-            team2s[i] = game.team2;
-            winners[i] = game.winner;
-            team1Scores[i] = game.team1Score;
-            team2Scores[i] = game.team2Score;
-        }
-
-        for (uint256 i = 0; i < totalTeams; i++) {
-            uint256 teamId = league.enrolledTeams[i];
-            teamIds[i] = teamId;
-            totalScores[i] = league.teamTotalScore[teamId];
-            gamesPlayed[i] = league.teamGamesPlayed[teamId];
-        }
-
-        return (gameIds, team1s, team2s, winners, team1Scores, team2Scores, teamIds, totalScores, gamesPlayed);
     }
 
     function getEnrolledTeams() public view returns (uint256[] memory, string[] memory, address[] memory) {
