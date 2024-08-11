@@ -274,7 +274,7 @@ contract GameLeague is ERC721Holder {
             GameType gameType = (rng.getRandomNumber(seed + i) % 2 == 0) ? GameType.Racing : GameType.Battle;
             uint256 gameId = league.gameIdCounter.current();
 
-            league.games[gameId] = Game(gameId, team1, team2, 0, gameType);
+            league.games[gameId] = Game(gameId, team1, team2, type(uint256).max, gameType);
             league.gameIdCounter.increment();
 
             // Store the game setup details in the arrays

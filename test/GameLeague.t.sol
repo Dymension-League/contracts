@@ -309,7 +309,7 @@ contract GameLeagueTest is Test {
                 gameLeague.getMatch(leagueId, i);
             assertEq(gameId, i, "Incorrect game ID");
             assertTrue(team1 != team2, "Teams should be different");
-            assertEq(winner, 0, "Winner should not be set yet");
+            assertEq(winner, type(uint256).max, "Winner should not be set yet");
             assertTrue(
                 gameType == GameLeague.GameType.Racing || gameType == GameLeague.GameType.Battle, "Invalid game type"
             );
