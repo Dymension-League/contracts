@@ -102,10 +102,18 @@ contract GameLeague is ERC721Holder {
         returns (uint256[] memory teamIds, string[] memory teamNames, uint256[][] memory tokenIndexes)
     {
         uint256 totalTeams = teamsCounter.current();
-        teamIds = new uint256[](totalTeams);
-        teamNames = new string[](totalTeams);
-        tokenIndexes = new uint256[][](totalTeams);
         uint256 count = 0;
+
+        for (uint256 i = 0; i < totalTeams; i++) {
+            if (teams[i].owner == owner) {
+                count++;
+            }
+        }
+
+        teamIds = new uint256[](count);
+        teamNames = new string[](count);
+        tokenIndexes = new uint256[][](count);
+        count = 0;
 
         for (uint256 i = 0; i < totalTeams; i++) {
             if (teams[i].owner == owner) {
@@ -116,18 +124,7 @@ contract GameLeague is ERC721Holder {
             }
         }
 
-        // Resize the arrays to include only the count of teams owned by the owner
-        uint256[] memory filteredTeamIds = new uint256[](count);
-        string[] memory filteredTeamNames = new string[](count);
-        uint256[][] memory filteredTokenIndexes = new uint256[][](count);
-
-        for (uint256 j = 0; j < count; j++) {
-            filteredTeamIds[j] = teamIds[j];
-            filteredTeamNames[j] = teamNames[j];
-            filteredTokenIndexes[j] = tokenIndexes[j];
-        }
-
-        return (filteredTeamIds, filteredTeamNames, filteredTokenIndexes);
+        return (teamIds, teamNames, tokenIndexes);
     }
 
     function initializeLeague() external payable {
