@@ -41,6 +41,8 @@ contract GameLeague is ERC721Holder {
         mapping(address => mapping(uint256 => uint256)) userBetsOnTeam;
         mapping(address => uint256[]) userBetTeams;
         mapping(address => uint256) claimableRewards;
+        mapping(uint256 => uint256) teamTotalScore;
+        mapping(uint256 => uint256) teamGamesPlayed;
         Counters.Counter gameIdCounter;
     }
 
@@ -49,6 +51,8 @@ contract GameLeague is ERC721Holder {
         uint256 team1;
         uint256 team2;
         uint256 winner;
+        uint256 team1Score;
+        uint256 team2Score;
         GameType gameType;
     }
 
@@ -271,7 +275,7 @@ contract GameLeague is ERC721Holder {
             GameType gameType = (rng.getRandomNumber(seed + i) % 2 == 0) ? GameType.Racing : GameType.Battle;
             uint256 gameId = league.gameIdCounter.current();
 
-            league.games[gameId] = Game(gameId, team1, team2, type(uint256).max, gameType);
+            league.games[gameId] = Game(gameId, team1, team2, type(uint256).max, 0, 0, gameType);
             league.gameIdCounter.increment();
 
             // Store the game setup details in the arrays
@@ -285,39 +289,43 @@ contract GameLeague is ERC721Holder {
         emit GamesSetup(leagueId, gameIds, team1s, team2s, gameTypes);
     }
 
-    function determineMatchOutcome(uint256 leagueId, uint256 gameId) public {
+    function determineMatchOutcome(uint256 leagueId, uint256 gameId) public returns (uint256 winner, uint256 loser) {
         League storage league = leagues[leagueId];
         Game storage game = league.games[gameId];
-        uint256 team1Score = calculateTeamScore(game.team1, game.gameType);
-        uint256 team2Score = calculateTeamScore(game.team2, game.gameType);
+        game.team1Score = calculateTeamScore(game.team1, game.gameType);
+        game.team2Score = calculateTeamScore(game.team2, game.gameType);
         uint256 seed = uint256(keccak256(abi.encodePacked(leagueId, gameId)));
 
         uint256 randomness = rng.getRandomNumber(seed);
         uint256 upsetChance = randomness % 100;
 
         // Add random factor to the underdog's score
-        if (team1Score < team2Score && upsetChance < 20) {
+        if (game.team1Score < game.team2Score && upsetChance < 20) {
             // 20% upset chance
-            team1Score += randomness % 20; // Random boost between 0 and 19
-        } else if (team2Score < team1Score && upsetChance < 20) {
-            team2Score += randomness % 20;
+            game.team1Score += randomness % 20; // Random boost between 0 and 19
+        } else if (game.team2Score < game.team1Score && upsetChance < 20) {
+            game.team2Score += randomness % 20;
         }
 
-        if (team1Score > team2Score) {
+        if (game.team1Score > game.team2Score) {
             game.winner = game.team1;
-        } else if (team2Score > team1Score) {
+        } else if (game.team2Score > game.team1Score) {
             game.winner = game.team2;
         } else {
             // In case of a tie, the team with the lower ID wins
             game.winner = game.team1 < game.team2 ? game.team1 : game.team2;
         }
+        league.teamTotalScore[game.team1] += game.team1Score;
+        league.teamTotalScore[game.team2] += game.team2Score;
+        league.teamGamesPlayed[game.team1]++;
+        league.teamGamesPlayed[game.team2]++;
+        return (winner, loser);
     }
 
     function calculateTeamScore(uint256 teamId, GameType gameType) internal view returns (uint256) {
         Team storage team = teams[teamId];
         uint256 score = 0;
-        require(team.nftIds.length == 3, "Each team must have exactly 3 NFTs.");
-        for (uint256 i = 0; i < 3; i++) {
+        for (uint256 i = 0; i < team.nftIds.length; i++) {
             uint256 attributes = cosmoShips.attributes(team.nftIds[i]);
             (, uint256 attack, uint256 speed, uint256 shield) = cosmoShips.decodeAttributes(attributes);
             if (gameType == GameType.Battle) {
@@ -326,7 +334,7 @@ contract GameLeague is ERC721Holder {
                 score += speed;
             }
         }
-        return score > 100 ? 100 : score;
+        return score;
     }
 
     function runGameLeague() external {
@@ -334,25 +342,85 @@ contract GameLeague is ERC721Holder {
         League storage league = leagues[leagueId];
         require(league.state == LeagueState.Running, "League is not in running state");
 
-        // Run the game until only 4 teams remain
-        while (league.enrolledTeams.length > 4) {
-            // Setup matches for this turn
+        while (league.enrolledTeams.length > 1) {
+            // Setup matches for this round
             setupMatches(league.gameIdCounter.current());
 
-            // Run the games for this turn
+            // Run the games for this round
             for (uint256 gameId = 0; gameId < league.gameIdCounter.current(); gameId++) {
                 determineMatchOutcome(leagueId, gameId);
             }
 
+            // Eliminate all losers
+            eliminateLosersFromGames(leagueId);
+
             // Reset counter for the next round
             league.gameIdCounter.reset();
 
-            // Emit leaderboard and eliminate lowest-scoring teams
-            emitLeaderboard(leagueId);
-            eliminateLowestScoringTeams(leagueId);
+            // If we're down to 1 or fewer teams, end the league
+            if (league.enrolledTeams.length <= 1) {
+                break;
+            }
         }
 
         league.state = LeagueState.Concluded;
+    }
+
+    function eliminateLosersFromGames(uint256 leagueId) internal {
+        League storage league = leagues[leagueId];
+        uint256[] memory winners = new uint256[](league.gameIdCounter.current());
+        uint256 winnerCount = 0;
+
+        // Collect winners from games
+        for (uint256 gameId = 0; gameId < league.gameIdCounter.current(); gameId++) {
+            Game storage game = league.games[gameId];
+            winners[winnerCount] = game.winner;
+            winnerCount++;
+        }
+
+        // Create a new array for remaining teams
+        uint256[] memory remainingTeams = new uint256[](league.enrolledTeams.length);
+        uint256 remainingTeamCount = 0;
+
+        // Keep winners and eliminate losers
+        for (uint256 i = 0; i < league.enrolledTeams.length; i++) {
+            uint256 teamId = league.enrolledTeams[i];
+            bool isWinner = false;
+
+            for (uint256 j = 0; j < winnerCount; j++) {
+                if (winners[j] == teamId) {
+                    isWinner = true;
+                    break;
+                }
+            }
+
+            if (isWinner) {
+                remainingTeams[remainingTeamCount] = teamId;
+                remainingTeamCount++;
+            } else {
+                eliminateTeam(leagueId, teamId);
+            }
+        }
+
+        // Update enrolledTeams with remaining teams
+        league.enrolledTeams = new uint256[](remainingTeamCount);
+        for (uint256 i = 0; i < remainingTeamCount; i++) {
+            league.enrolledTeams[i] = remainingTeams[i];
+        }
+    }
+
+    function eliminateTeam(uint256 leagueId, uint256 teamId) internal {
+        League storage league = leagues[leagueId];
+
+        // Return NFTs to the team owner
+        for (uint256 j = 0; j < teams[teamId].nftIds.length; j++) {
+            cosmoShips.transferFrom(address(this), teams[teamId].owner, teams[teamId].nftIds[j]);
+        }
+
+        // Clean up other data structures
+        delete league.teamsMap[teamId];
+        delete league.teamTotalScore[teamId];
+        delete league.teamGamesPlayed[teamId];
     }
 
     function emitLeaderboard(uint256 leagueId) internal {
@@ -373,32 +441,37 @@ contract GameLeague is ERC721Holder {
     function eliminateLowestScoringTeams(uint256 leagueId) internal {
         League storage league = leagues[leagueId];
         uint256 numTeams = league.enrolledTeams.length;
+        require(numTeams > 1, "Cannot eliminate when only one team remains");
 
-        if (numTeams <= 4) {
-            return; // Don't eliminate if we're down to the final 4 teams
-        }
+        uint256 lowestAverageScore = type(uint256).max;
+        uint256 lowestScoringTeamIndex = 0;
 
-        uint256 teamsToKeep = numTeams / 2;
-        if (teamsToKeep % 2 != 0) {
-            teamsToKeep--; // Ensure we keep an even number of teams
-        }
-
-        // Create a new array to keep only the top teams
-        uint256[] memory remainingTeams = new uint256[](teamsToKeep);
-        for (uint256 i = 0; i < teamsToKeep; i++) {
-            remainingTeams[i] = league.enrolledTeams[i];
-        }
-
-        // Remove eliminated teams
-        for (uint256 i = teamsToKeep; i < numTeams; i++) {
+        for (uint256 i = 0; i < numTeams; i++) {
             uint256 teamId = league.enrolledTeams[i];
-            for (uint256 j = 0; j < teams[teamId].nftIds.length; j++) {
-                cosmoShips.transferFrom(address(this), teams[teamId].owner, teams[teamId].nftIds[j]);
+            uint256 gamesPlayed = league.teamGamesPlayed[teamId];
+            if (gamesPlayed == 0) continue; // Skip teams that haven't played any games
+
+            uint256 averageScore = league.teamTotalScore[teamId] / gamesPlayed;
+            if (averageScore < lowestAverageScore) {
+                lowestAverageScore = averageScore;
+                lowestScoringTeamIndex = i;
             }
-            delete league.teamsMap[teamId];
         }
 
-        league.enrolledTeams = remainingTeams;
+        // Eliminate the lowest scoring team
+        uint256 teamToEliminate = league.enrolledTeams[lowestScoringTeamIndex];
+
+        // Return NFTs to the team owner
+        for (uint256 j = 0; j < teams[teamToEliminate].nftIds.length; j++) {
+            cosmoShips.transferFrom(address(this), teams[teamToEliminate].owner, teams[teamToEliminate].nftIds[j]);
+        }
+
+        // Remove the team from the league
+        league.enrolledTeams[lowestScoringTeamIndex] = league.enrolledTeams[numTeams - 1];
+        league.enrolledTeams.pop();
+        delete league.teamsMap[teamToEliminate];
+        delete league.teamTotalScore[teamToEliminate];
+        delete league.teamGamesPlayed[teamToEliminate];
     }
 
     function quickSortTeams(uint256[] storage arr, int256 left, int256 right, uint256 leagueId) internal {
@@ -418,6 +491,55 @@ contract GameLeague is ERC721Holder {
         }
         if (left < j) quickSortTeams(arr, left, j, leagueId);
         if (i < right) quickSortTeams(arr, i, right, leagueId);
+    }
+
+    function getLeaderboard(uint256 leagueId)
+        public
+        view
+        returns (
+            uint256[] memory gameIds,
+            uint256[] memory team1s,
+            uint256[] memory team2s,
+            uint256[] memory winners,
+            uint256[] memory team1Scores,
+            uint256[] memory team2Scores,
+            uint256[] memory teamIds,
+            uint256[] memory totalScores,
+            uint256[] memory gamesPlayed
+        )
+    {
+        League storage league = leagues[leagueId];
+        uint256 totalGames = league.gameIdCounter.current();
+        uint256 totalTeams = league.enrolledTeams.length;
+
+        gameIds = new uint256[](totalGames);
+        team1s = new uint256[](totalGames);
+        team2s = new uint256[](totalGames);
+        winners = new uint256[](totalGames);
+        team1Scores = new uint256[](totalGames);
+        team2Scores = new uint256[](totalGames);
+        teamIds = new uint256[](totalTeams);
+        totalScores = new uint256[](totalTeams);
+        gamesPlayed = new uint256[](totalTeams);
+
+        for (uint256 i = 0; i < totalGames; i++) {
+            Game memory game = league.games[i];
+            gameIds[i] = game.id;
+            team1s[i] = game.team1;
+            team2s[i] = game.team2;
+            winners[i] = game.winner;
+            team1Scores[i] = game.team1Score;
+            team2Scores[i] = game.team2Score;
+        }
+
+        for (uint256 i = 0; i < totalTeams; i++) {
+            uint256 teamId = league.enrolledTeams[i];
+            teamIds[i] = teamId;
+            totalScores[i] = league.teamTotalScore[teamId];
+            gamesPlayed[i] = league.teamGamesPlayed[teamId];
+        }
+
+        return (gameIds, team1s, team2s, winners, team1Scores, team2Scores, teamIds, totalScores, gamesPlayed);
     }
 
     function getEnrolledTeams() public view returns (uint256[] memory, string[] memory, address[] memory) {

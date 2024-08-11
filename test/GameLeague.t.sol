@@ -336,6 +336,6 @@ contract GameLeagueTest is Test {
 
         // Verify correct number of teams remaining
         (uint256[] memory remainingTeams,,) = gameLeague.getEnrolledTeams();
-        assertEq(remainingTeams.length, 2, "Should have 2 teams remaining");
+        assertEq(remainingTeams.length, 1, "Should have 1 team remaining");
     }
 }
