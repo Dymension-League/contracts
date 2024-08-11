@@ -31,8 +31,9 @@ contract GameLeague is ERC721Holder {
 
     struct League {
         uint256 id;
-        LeagueState state;
         uint256 prizePool;
+        uint256 totalBetsInLeague;
+        LeagueState state;
         uint256[] enrolledTeams;
         mapping(uint256 => bool) teamsMap;
         mapping(uint256 => Game) games;
@@ -40,7 +41,6 @@ contract GameLeague is ERC721Holder {
         mapping(address => mapping(uint256 => uint256)) userBetsOnTeam;
         mapping(address => uint256[]) userBetTeams;
         mapping(address => uint256) claimableRewards;
-        uint256 totalBetsInLeague;
         Counters.Counter gameIdCounter;
     }
 
