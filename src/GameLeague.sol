@@ -358,11 +358,6 @@ contract GameLeague is ERC721Holder {
 
             // Reset counter for the next round
             league.gameIdCounter.reset();
-
-            // If we're down to 1 or fewer teams, end the league
-            if (league.enrolledTeams.length <= 1) {
-                break;
-            }
         }
 
         league.state = LeagueState.Concluded;
