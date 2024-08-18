@@ -331,4 +331,48 @@ contract GameLeagueTest is Test {
         (uint256[] memory remainingTeams,,) = gameLeague.getEnrolledTeams();
         assertEq(remainingTeams.length, 1, "Should have 1 team remaining");
     }
+
+    function testGetLeaderboard() public {
+        // Setup
+        gameLeague.initializeLeague{value: 1 ether}();
+        uint256 leagueId = gameLeague.currentLeagueId();
+
+        // Create and enroll teams
+        setupTeamAndEnroll(alice, aliceAttrs, "Team-Alice");
+        setupTeamAndEnroll(bob, bobAttrs, "Team-Bob");
+        setupTeamAndEnroll(carol, carolAttrs, "Team-Carol");
+        setupTeamAndEnroll(tony, tonyAttrs, "Team-Tony");
+
+        gameLeague.endEnrollmentAndStartBetting();
+        gameLeague.endBettingAndStartGame();
+
+        // Simulate some games
+        gameLeague.setupMatches(1);
+        gameLeague.determineMatchOutcome(leagueId, 0);
+        gameLeague.determineMatchOutcome(leagueId, 1);
+
+        // Get the leaderboard
+        (
+            uint256[] memory teamIds,
+            string[] memory teamNames,
+            uint256[] memory totalScores,
+            uint256[] memory gamesPlayed
+        ) = gameLeague.getLeaderboard(leagueId);
+
+        // Assertions
+        assertEq(teamIds.length, 4, "Should have 4 teams on the leaderboard");
+        assertEq(teamNames.length, 4, "Should have 4 team names");
+        assertEq(totalScores.length, 4, "Should have 4 total scores");
+        assertEq(gamesPlayed.length, 4, "Should have 4 games played counts");
+
+        // Check that all teams have played at least one game
+        for (uint256 i = 0; i < gamesPlayed.length; i++) {
+            assertTrue(gamesPlayed[i] > 0, "Each team should have played at least one game");
+        }
+
+        // Check that team names are not empty
+        for (uint256 i = 0; i < teamNames.length; i++) {
+            assertTrue(bytes(teamNames[i]).length > 0, "Team names should not be empty");
+        }
+    }
 }
