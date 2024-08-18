@@ -5,7 +5,6 @@ import "openzeppelin-contracts/contracts/token/ERC721/utils/ERC721Holder.sol";
 import "openzeppelin-contracts/contracts/utils/Counters.sol";
 import "./CosmoShips.sol";
 import "./IRandomNumberGenerator.sol";
-import "forge-std/console.sol";
 
 contract GameLeague is ERC721Holder {
     using Counters for Counters.Counter;
@@ -192,10 +191,10 @@ contract GameLeague is ERC721Holder {
         league.state = LeagueState.BetsOpen;
     }
 
-    function placeBet(uint256 leagueId, uint256 teamId, uint256 amount) external {
+    function placeBet(uint256 leagueId, uint256 teamId) external payable {
         League storage league = leagues[leagueId];
         require(league.state == LeagueState.BetsOpen, "Betting is not active");
-        require(amount > 0, "Bet amount must be greater than 0");
+        require(msg.value > 0, "Bet amount must be greater than 0");
         require(league.teamsMap[teamId], "Team does not exist in this league");
 
         // If it's the first bet on this team by the user for this league, add to the list
@@ -204,11 +203,11 @@ contract GameLeague is ERC721Holder {
         }
 
         // Update the bet amount
-        league.userBetsOnTeam[msg.sender][teamId] += amount;
+        league.userBetsOnTeam[msg.sender][teamId] += msg.value;
 
         // Update the total bets for the team and the league
-        league.totalBetsOnTeam[teamId] += amount;
-        league.totalBetsInLeague += amount;
+        league.totalBetsOnTeam[teamId] += msg.value;
+        league.totalBetsInLeague += msg.value;
     }
 
     // Function to get all bet details for a user in a specific league

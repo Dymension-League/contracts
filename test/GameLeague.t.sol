@@ -7,7 +7,6 @@ import "../src/GameLeague.sol";
 import "../src/IAttributeVerifier.sol";
 import "./fixtures/mockVerifier.sol";
 import "./fixtures/mockRandomGenerator.sol";
-import "forge-std/console.sol";
 
 contract GameLeagueTest is Test {
     GameLeague gameLeague;
@@ -102,7 +101,6 @@ contract GameLeagueTest is Test {
     }
 
     function testCreateTeam(string memory teamName, bool approveAll) public {
-        console.log("Running testCreateTeam");
         address user = address(0x1);
         vm.deal(user, 10 ^ 18);
 
@@ -146,7 +144,6 @@ contract GameLeagueTest is Test {
     }
 
     function testInitializeLeague(uint256 _prizePool) public {
-        console.log("Running testInitializeLeague");
         _prizePool = bound(_prizePool, 1 ether, 100000 ether);
         vm.deal(deployer, _prizePool * 2);
 
@@ -164,7 +161,6 @@ contract GameLeagueTest is Test {
     }
 
     function testEnrollToLeague() public {
-        console.log("Running testEnrollToLeague");
         vm.deal(deployer, 2 ether);
         vm.prank(deployer);
         gameLeague.initializeLeague{value: 1 ether}();
@@ -174,7 +170,6 @@ contract GameLeagueTest is Test {
     }
 
     function testEndEnrollmentAndStartBetting() public {
-        console.log("Running testEndEnrollmentAndStartBetting");
         // Setup: Assume leagueId of 1 and it is currently in the Enrollment state
         gameLeague.initializeLeague{value: 1 ether}();
         uint256 leagueId = gameLeague.currentLeagueId();
@@ -195,7 +190,6 @@ contract GameLeagueTest is Test {
     }
 
     function testBetPlacing() public {
-        console.log("Running testBetPlacing");
         gameLeague.initializeLeague{value: 1 ether}();
         uint256 leagueId = gameLeague.currentLeagueId();
         // Team bob
@@ -213,7 +207,7 @@ contract GameLeagueTest is Test {
         uint256 betAmountAlice = 1 ether;
         vm.deal(alice, betAmountAlice);
         vm.startPrank(alice);
-        gameLeague.placeBet(gameLeague.currentLeagueId(), teamId, betAmountAlice);
+        gameLeague.placeBet{value: betAmountAlice}(gameLeague.currentLeagueId(), teamId);
         (uint256[] memory betTeamIdsAlice, uint256[] memory betAmountsAlice) = gameLeague.getUserBets(leagueId, alice);
         assertEq(betTeamIdsAlice[0], teamId, "Alice's Team ID should match");
         assertEq(betAmountsAlice[0], betAmountAlice, "Alice's bet amount should match");
@@ -223,8 +217,8 @@ contract GameLeagueTest is Test {
         uint256 betAmountBob = 2 ether;
         vm.deal(bob, betAmountBob);
         vm.startPrank(bob);
-        gameLeague.placeBet(leagueId, teamId, betAmountBob / 2);
-        gameLeague.placeBet(leagueId, teamId, betAmountBob / 2);
+        gameLeague.placeBet{value: betAmountBob / 2}(leagueId, teamId);
+        gameLeague.placeBet{value: betAmountBob / 2}(leagueId, teamId);
         (uint256[] memory betTeamIdsBob, uint256[] memory betAmountsBob) = gameLeague.getUserBets(leagueId, bob);
         assertEq(betTeamIdsBob[0], teamId, "Bob's Team ID should match");
         assertEq(betAmountsBob[0], betAmountBob, "Bob's bet amount should match");
@@ -263,7 +257,6 @@ contract GameLeagueTest is Test {
     }
 
     function testMatchSetupAndOutcome() public {
-        console.log("Running testMatchSetupAndOutcome");
         // Initialize league
         gameLeague.initializeLeague{value: 1 ether}();
         uint256 leagueId = gameLeague.currentLeagueId();
