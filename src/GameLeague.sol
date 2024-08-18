@@ -313,8 +313,9 @@ contract GameLeague is ERC721Holder {
         } else if (game.team2Score > game.team1Score) {
             game.winner = game.team2;
         } else {
-            // In case of a tie, the team with the lower ID wins
-            game.winner = game.team1 < game.team2 ? game.team1 : game.team2;
+            // In case of a tie, determine the winner randomly
+            uint256 tieBreaker = randomness % 2;
+            game.winner = tieBreaker == 0 ? game.team1 : game.team2;
         }
         league.teamTotalScore[game.team1] += game.team1Score;
         league.teamTotalScore[game.team2] += game.team2Score;
