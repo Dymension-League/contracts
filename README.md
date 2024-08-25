@@ -47,8 +47,6 @@ $ anvil
 
 ### Deploy
 
-Add `LOCAL_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80` to your `.env` file.
-
 From a new terminal run:
 
 ```shell
@@ -57,16 +55,24 @@ avril
 Then, open a new terminal and type:
 
 ```shell
-forge script -s="run(bytes32, uint256)" --rpc-url 127.0.0.1:8545 --broadcast --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 --no-cache scripts/deploy.s.sol 0x1 1000000000000
+forge script -s="run(bytes32, uint256)" --rpc-url 127.0.0.1:8545 --broadcast --private-key <address-anvil-provides> --no-cache scripts/deploy.s.sol <merkel-root-from-csv> 1000000000000
 ```
 
-Note that the address, is provided by `avril`. In case you need to provide another one, change `LOCAL_PRIVATE_KEY`.
+Note that the address, is provided by `avril`.
 
 You can find the contract address by using the following command:
 
 ```shell
-cat broadcast/local-deploy.sol/31337/run-latest.json | grep -C 1 "CosmoShips"
+cat broadcast/deploy.s.sol/31337/run-latest.json | grep -C 1 "CosmoShips"
+cat broadcast/deploy.s.sol/31337/run-latest.json | grep -C 1 "GameLeague"
 
+```
+
+Adding those to the frontend's repo `.env` like below, you can use local contracts for local development
+
+```
+REACT_APP_LOCAL_COSMOSHIPS_ADDRESS=<address cosmoships>
+REACT_APP_LOCAL_GAMELEAGUE_ADDRESS=<address gameleague>
 ```
 
 ### Cast
