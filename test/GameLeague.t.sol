@@ -357,7 +357,6 @@ contract GameLeagueTest is Test {
             string[] memory teamNames,
             uint256[] memory totalScores,
             uint256[] memory gamesPlayed,
-            bool[] memory eliminated
         ) = gameLeague.getLeaderboard(leagueId);
 
         // Assertions
@@ -368,6 +367,7 @@ contract GameLeagueTest is Test {
 
         // Check that all teams have played at least one game
         for (uint256 i = 0; i < gamesPlayed.length; i++) {
+            console.log("Team", i, "Games Played:", gamesPlayed[i]);
             assertTrue(gamesPlayed[i] > 0, "Each team should have played at least one game");
         }
 
@@ -409,14 +409,15 @@ contract GameLeagueTest is Test {
         ) = gameLeague.getLeaderboard(leagueId);
 
         // Assertions
-        assertEq(teamIds.length, 2, "Should have 4 teams on the leaderboard");
-        assertEq(teamNames.length, 2, "Should have 4 team names");
-        assertEq(totalScores.length, 2, "Should have 4 total scores");
-        assertEq(gamesPlayed.length, 2, "Should have 4 games played counts");
-        assertEq(eliminated.length, 2, "Should have 4 elimination statuses");
+        assertEq(teamIds.length, 4, "Should have 4 teams on the leaderboard");
+        assertEq(teamNames.length, 4, "Should have 4 team names");
+        assertEq(totalScores.length, 4, "Should have 4 total scores");
+        assertEq(gamesPlayed.length, 4, "Should have 4 games played counts");
+        assertEq(eliminated.length, 4, "Should have 4 elimination statuses");
 
         // Check that all teams have played at least one game
         for (uint256 i = 0; i < gamesPlayed.length; i++) {
+            console.log("Team", i, "Games Played:", gamesPlayed[i]);
             assertTrue(gamesPlayed[i] > 0, "Each team should have played at least one game");
         }
 
