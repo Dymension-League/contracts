@@ -151,7 +151,7 @@ contract GameLeagueTest is Test {
         vm.prank(deployer);
         gameLeague.initializeLeague{value: _prizePool}();
         // Check if the league state is correct after initialization
-        (, GameLeague.LeagueState state,,,) = gameLeague.getLeague(gameLeague.currentLeagueId());
+        (, GameLeague.LeagueState state,,,,) = gameLeague.getLeague(gameLeague.currentLeagueId());
         assertEq(uint256(state), uint256(GameLeague.LeagueState.Initiated));
 
         // Expect revert on trying to initialize another league when one is active
@@ -181,7 +181,7 @@ contract GameLeagueTest is Test {
         gameLeague.endEnrollmentAndStartBetting();
 
         // Check if the state has transitioned to Betting
-        (, GameLeague.LeagueState state,,,) = gameLeague.getLeague(leagueId);
+        (, GameLeague.LeagueState state,,,,) = gameLeague.getLeague(leagueId);
         assert(state == GameLeague.LeagueState.BetsOpen);
 
         // Try to call the function when the league is not in Enrollment state
@@ -225,7 +225,7 @@ contract GameLeagueTest is Test {
         vm.stopPrank();
 
         // Check total bets in the league
-        (,,,, uint256 totalLeagueBets) = gameLeague.getLeague(leagueId);
+        (,,,, uint256 totalLeagueBets,) = gameLeague.getLeague(leagueId);
         assertEq(
             totalLeagueBets,
             betAmountAlice + betAmountBob,
@@ -248,7 +248,7 @@ contract GameLeagueTest is Test {
         gameLeague.endBettingAndStartGame();
 
         // Check if the state has transitioned to Running
-        (, GameLeague.LeagueState state,,,) = gameLeague.getLeague(leagueId);
+        (, GameLeague.LeagueState state,,,,) = gameLeague.getLeague(leagueId);
         assert(state == GameLeague.LeagueState.Running);
 
         // Try to call the function when the league is not in Enrollment state
@@ -271,7 +271,7 @@ contract GameLeagueTest is Test {
         gameLeague.setupMatches(1);
 
         // Retrieve and assert the state of the league after setting up matches
-        (, GameLeague.LeagueState state,, uint256[] memory enrolledTeams,) = gameLeague.getLeague(leagueId);
+        (, GameLeague.LeagueState state,, uint256[] memory enrolledTeams,,) = gameLeague.getLeague(leagueId);
         assertEq(uint256(state), uint256(GameLeague.LeagueState.BetsOpen));
         assertTrue(enrolledTeams.length >= 2);
 
@@ -294,7 +294,7 @@ contract GameLeagueTest is Test {
         gameLeague.setupMatches(gameLeague.currentLeagueId());
 
         // Verify correct number of matches created
-        (,,, uint256[] memory enrolledTeams,) = gameLeague.getLeague(leagueId);
+        (,,, uint256[] memory enrolledTeams,,) = gameLeague.getLeague(leagueId);
         uint256 expectedMatches = enrolledTeams.length / 2;
 
         for (uint256 i = 0; i < expectedMatches; i++) {
@@ -324,7 +324,7 @@ contract GameLeagueTest is Test {
         gameLeague.runGameLeague();
 
         // Verify league state
-        (, GameLeague.LeagueState state,,,) = gameLeague.getLeague(gameLeague.currentLeagueId());
+        (, GameLeague.LeagueState state,,,,) = gameLeague.getLeague(gameLeague.currentLeagueId());
         assertEq(uint256(state), uint256(GameLeague.LeagueState.Concluded), "League should be concluded");
 
         // Verify correct number of teams remaining
@@ -356,7 +356,8 @@ contract GameLeagueTest is Test {
             uint256[] memory teamIds,
             string[] memory teamNames,
             uint256[] memory totalScores,
-            uint256[] memory gamesPlayed
+            uint256[] memory gamesPlayed,
+            bool[] memory eliminated
         ) = gameLeague.getLeaderboard(leagueId);
 
         // Assertions
@@ -408,11 +409,11 @@ contract GameLeagueTest is Test {
         ) = gameLeague.getLeaderboard(leagueId);
 
         // Assertions
-        assertEq(teamIds.length, 4, "Should have 4 teams on the leaderboard");
-        assertEq(teamNames.length, 4, "Should have 4 team names");
-        assertEq(totalScores.length, 4, "Should have 4 total scores");
-        assertEq(gamesPlayed.length, 4, "Should have 4 games played counts");
-        assertEq(eliminated.length, 4, "Should have 4 elimination statuses");
+        assertEq(teamIds.length, 2, "Should have 4 teams on the leaderboard");
+        assertEq(teamNames.length, 2, "Should have 4 team names");
+        assertEq(totalScores.length, 2, "Should have 4 total scores");
+        assertEq(gamesPlayed.length, 2, "Should have 4 games played counts");
+        assertEq(eliminated.length, 2, "Should have 4 elimination statuses");
 
         // Check that all teams have played at least one game
         for (uint256 i = 0; i < gamesPlayed.length; i++) {

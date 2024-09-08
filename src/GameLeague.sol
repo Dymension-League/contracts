@@ -158,7 +158,12 @@ contract GameLeague is ERC721Holder {
         )
     {
         League storage league = leagues[leagueId];
-        return (league.id, league.state, league.prizePool, league.enrolledTeams, league.totalBetsInLeague);
+        bool[] memory eliminatedTeams = new bool[](league.enrolledTeams.length);
+        for (uint256 i = 0; i < league.enrolledTeams.length; i++) {
+            eliminatedTeams[i] = league.eliminatedTeams[league.enrolledTeams[i]];
+        }
+        return
+            (league.id, league.state, league.prizePool, league.enrolledTeams, league.totalBetsInLeague, eliminatedTeams);
     }
 
     function getMatch(uint256 leagueId, uint256 matchId)
@@ -364,7 +369,7 @@ contract GameLeague is ERC721Holder {
         league.state = LeagueState.Concluded;
     }
 
-    function eliminateLosersFromGames(uint256 leagueId) internal {
+    function eliminateLosersFromGames(uint256 leagueId) public {
         League storage league = leagues[leagueId];
         uint256[] memory winners = new uint256[](league.gameIdCounter.current());
         uint256 winnerCount = 0;
@@ -438,7 +443,8 @@ contract GameLeague is ERC721Holder {
             uint256[] memory teamIds,
             string[] memory teamNames,
             uint256[] memory totalScores,
-            uint256[] memory gamesPlayed
+            uint256[] memory gamesPlayed,
+            bool[] memory eliminated
         )
     {
         League storage league = leagues[leagueId];
@@ -448,6 +454,7 @@ contract GameLeague is ERC721Holder {
         teamNames = new string[](teamCount);
         totalScores = new uint256[](teamCount);
         gamesPlayed = new uint256[](teamCount);
+        eliminated = new bool[](teamCount);
 
         for (uint256 i = 0; i < teamCount; i++) {
             uint256 teamId = league.enrolledTeams[i];
@@ -455,9 +462,10 @@ contract GameLeague is ERC721Holder {
             teamNames[i] = teams[teamId].name;
             totalScores[i] = league.teamTotalScore[teamId];
             gamesPlayed[i] = league.teamGamesPlayed[teamId];
+            eliminated[i] = league.eliminatedTeams[league.enrolledTeams[i]];
         }
 
-        return (teamIds, teamNames, totalScores, gamesPlayed);
+        return (teamIds, teamNames, totalScores, gamesPlayed, eliminated);
     }
 
     function eliminateLowestScoringTeams(uint256 leagueId) internal {
