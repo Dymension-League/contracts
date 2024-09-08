@@ -375,4 +375,63 @@ contract GameLeagueTest is Test {
             assertTrue(bytes(teamNames[i]).length > 0, "Team names should not be empty");
         }
     }
+
+    function testLeaderboardReflectsScoresAndElimination() public {
+        // Setup
+        gameLeague.initializeLeague{value: 1 ether}();
+        uint256 leagueId = gameLeague.currentLeagueId();
+
+        // Create and enroll teams
+        setupTeamAndEnroll(alice, aliceAttrs, "Team-Alice");
+        setupTeamAndEnroll(bob, bobAttrs, "Team-Bob");
+        setupTeamAndEnroll(carol, carolAttrs, "Team-Carol");
+        setupTeamAndEnroll(tony, tonyAttrs, "Team-Tony");
+
+        gameLeague.endEnrollmentAndStartBetting();
+        gameLeague.endBettingAndStartGame();
+
+        // Simulate some games
+        gameLeague.setupMatches(1);
+        gameLeague.determineMatchOutcome(leagueId, 0);
+        gameLeague.determineMatchOutcome(leagueId, 1);
+
+        // Eliminate losers
+        gameLeague.eliminateLosersFromGames(leagueId);
+
+        // Get the leaderboard
+        (
+            uint256[] memory teamIds,
+            string[] memory teamNames,
+            uint256[] memory totalScores,
+            uint256[] memory gamesPlayed,
+            bool[] memory eliminated
+        ) = gameLeague.getLeaderboard(leagueId);
+
+        // Assertions
+        assertEq(teamIds.length, 4, "Should have 4 teams on the leaderboard");
+        assertEq(teamNames.length, 4, "Should have 4 team names");
+        assertEq(totalScores.length, 4, "Should have 4 total scores");
+        assertEq(gamesPlayed.length, 4, "Should have 4 games played counts");
+        assertEq(eliminated.length, 4, "Should have 4 elimination statuses");
+
+        // Check that all teams have played at least one game
+        for (uint256 i = 0; i < gamesPlayed.length; i++) {
+            assertTrue(gamesPlayed[i] > 0, "Each team should have played at least one game");
+        }
+
+        // Check that team names are not empty
+        for (uint256 i = 0; i < teamNames.length; i++) {
+            assertTrue(bytes(teamNames[i]).length > 0, "Team names should not be empty");
+        }
+
+        // Check that at least one team is eliminated
+        bool atleastOneEliminated = false;
+        for (uint256 i = 0; i < eliminated.length; i++) {
+            if (eliminated[i]) {
+                atleastOneEliminated = true;
+                break;
+            }
+        }
+        assertTrue(atleastOneEliminated, "At least one team should be eliminated");
+    }
 }

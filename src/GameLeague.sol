@@ -14,7 +14,12 @@ contract GameLeague is ERC721Holder {
     Counters.Counter private teamsCounter;
 
     event Leaderboard(
-        uint256 indexed leagueId, uint256[] teamIds, string[] teamNames, uint256[] totalScores, uint256[] gamesPlayed
+        uint256 indexed leagueId,
+        uint256[] teamIds,
+        string[] teamNames,
+        uint256[] totalScores,
+        uint256[] gamesPlayed,
+        bool[] eliminated
     );
     event GamesSetup(
         uint256 indexed leagueId, uint256[] gameIds, uint256[] team1s, uint256[] team2s, GameType[] gameTypes
@@ -45,6 +50,7 @@ contract GameLeague is ERC721Holder {
         mapping(uint256 => uint256) teamTotalScore;
         mapping(uint256 => uint256) teamGamesPlayed;
         Counters.Counter gameIdCounter;
+        mapping(uint256 => bool) eliminatedTeams;
     }
 
     struct Game {
@@ -109,12 +115,6 @@ contract GameLeague is ERC721Holder {
         uint256 totalTeams = teamsCounter.current();
         uint256 count = 0;
 
-        for (uint256 i = 0; i < totalTeams; i++) {
-            if (teams[i].owner == owner) {
-                count++;
-            }
-        }
-
         teamIds = new uint256[](count);
         teamNames = new string[](count);
         tokenIndexes = new uint256[][](count);
@@ -153,7 +153,8 @@ contract GameLeague is ERC721Holder {
             LeagueState state,
             uint256 prizePool,
             uint256[] memory enrolledTeams,
-            uint256 totalBetsInLeague
+            uint256 totalBetsInLeague,
+            bool[] memory eliminated
         )
     {
         League storage league = leagues[leagueId];
@@ -375,11 +376,9 @@ contract GameLeague is ERC721Holder {
             winnerCount++;
         }
 
-        // Create a new array for remaining teams
+        // Mark losers as eliminated
         uint256[] memory remainingTeams = new uint256[](league.enrolledTeams.length);
         uint256 remainingTeamCount = 0;
-
-        // Keep winners and eliminate losers
         for (uint256 i = 0; i < league.enrolledTeams.length; i++) {
             uint256 teamId = league.enrolledTeams[i];
             bool isWinner = false;
@@ -425,10 +424,11 @@ contract GameLeague is ERC721Holder {
             uint256[] memory teamIds,
             string[] memory teamNames,
             uint256[] memory totalScores,
-            uint256[] memory gamesPlayed
+            uint256[] memory gamesPlayed,
+            bool[] memory eliminated
         ) = getLeaderboard(leagueId);
 
-        emit Leaderboard(leagueId, teamIds, teamNames, totalScores, gamesPlayed);
+        emit Leaderboard(leagueId, teamIds, teamNames, totalScores, gamesPlayed, eliminated);
     }
 
     function getLeaderboard(uint256 leagueId)
