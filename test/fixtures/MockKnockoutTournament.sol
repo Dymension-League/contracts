@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 import "../../src/KnockoutTournament.sol";
 
 contract MockKnockoutTournament is KnockoutTournament {
-    function initializeTournament(uint256[] memory teamIds) public override returns (uint256 tournamentId) {
+    function initializeTournament(uint256[] calldata teamIds) public override returns (uint256 tournamentId) {
         return super.initializeTournament(teamIds);
     }
 

@@ -48,9 +48,7 @@ abstract contract KnockoutTournament {
     mapping(uint256 => Tournament) private tournaments;
 
     /// @notice Initializes a new tournament with the given team IDs.
-    /// @param teamIds An array of team IDs that will participate in the tournament.
-    /// @return tournamentId The ID of the newly created tournament.
-    function initializeTournament(uint256[] memory teamIds) public virtual returns (uint256 tournamentId) {
+    function initializeTournament(uint256[] calldata teamIds) public virtual returns (uint256 tournamentId) {
         require(teamIds.length > 1, "At least two teams are required");
         tournamentId = nextTournamentId++;
         Tournament storage newTournament = tournaments[tournamentId];
