@@ -86,8 +86,11 @@ abstract contract KnockoutTournament {
 
         require(matchesToProcess > 0, "No matches to process");
 
-        for (uint256 i = 0; i < matchesToProcess; i++) {
-            _processMatch(tournamentId, tournament, startIndex + i, randomSeed);
+        uint256[] memory teamsInCurrentRound = tournament.teamsInCurrentRound;
+
+        for (uint256 i = 0; i < matchesToProcess; ) {
+            _processMatch(tournamentId, tournament, startIndex + i, randomSeed, teamsInCurrentRound);
+            unchecked { i++; }
         }
 
         tournament.processedMatches[tournament.currentRound] += matchesToProcess;
