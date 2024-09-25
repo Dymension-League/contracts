@@ -88,9 +88,11 @@ abstract contract KnockoutTournament {
 
         uint256[] memory teamsInCurrentRound = tournament.teamsInCurrentRound;
 
-        for (uint256 i = 0; i < matchesToProcess; ) {
+        for (uint256 i = 0; i < matchesToProcess;) {
             _processMatch(tournamentId, tournament, startIndex + i, randomSeed, teamsInCurrentRound);
-            unchecked { i++; }
+            unchecked {
+                i++;
+            }
         }
 
         tournament.processedMatches[tournament.currentRound] += matchesToProcess;
@@ -105,10 +107,14 @@ abstract contract KnockoutTournament {
     /// @param tournament The tournament data structure.
     /// @param matchIndex The index of the match in the current round.
     /// @param randomSeed A random seed used for match outcome determination.
-    function _processMatch(uint256 tournamentId, Tournament storage tournament, uint256 matchIndex, uint256 randomSeed)
-        internal
-    {
-        uint256[] storage teams = tournament.teamsInCurrentRound;
+    /// @param teams The teams to process
+    function _processMatch(
+        uint256 tournamentId,
+        Tournament storage tournament,
+        uint256 matchIndex,
+        uint256 randomSeed,
+        uint256[] memory teams
+    ) internal {
         uint256 team1Index = matchIndex * 2;
         uint256 team2Index = team1Index + 1;
 
@@ -135,8 +141,6 @@ abstract contract KnockoutTournament {
     }
 
     /// @dev Advances the tournament to the next round.
-    /// @param tournamentId The ID of the tournament.
-    /// @param tournament The tournament data structure.
     function _advanceToNextRound(uint256 tournamentId, Tournament storage tournament) internal {
         if (tournament.teamsInCurrentRound.length % 2 == 1) {
             uint256 lastTeam = tournament.teamsInCurrentRound[tournament.teamsInCurrentRound.length - 1];
@@ -160,8 +164,6 @@ abstract contract KnockoutTournament {
     }
 
     /// @notice Returns the number of processed matches in the current or previous round.
-    /// @param tournamentId The ID of the tournament.
-    /// @return The number of processed matches in the round.
     function getProcessedMatchesCount(uint256 tournamentId) public view returns (uint256) {
         Tournament storage tournament = tournaments[tournamentId];
 
@@ -173,9 +175,6 @@ abstract contract KnockoutTournament {
     }
 
     /// @notice Returns the team IDs participating in a given round.
-    /// @param tournamentId The ID of the tournament.
-    /// @param round The round number to retrieve teams from.
-    /// @return An array of team IDs in the specified round.
     function getTeamsInRound(uint256 tournamentId, uint256 round) public view returns (uint256[] memory) {
         return tournaments[tournamentId].teamsInRound[round];
     }
