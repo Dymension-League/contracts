@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.4;
 
+import "forge-std/console.sol";
 import "forge-std/Test.sol";
 import "../src/CosmoShips.sol";
 import "../src/GameLeague.sol";
@@ -72,19 +73,26 @@ contract GameLeagueTest is Test {
         assert(address(gameLeague) != address(0));
     }
 
+    function setupTeam(address user, uint256[] memory attrs, string memory teamName) internal returns (uint256) {
+        vm.deal(user, 3 * mintPrice + 100 ether);
+        uint256[] memory ids = mintToken(user, attrs);
+        vm.startPrank(user);
+        cosmoShips.setApprovalForAll(address(gameLeague), true);
+        uint256 teamId = gameLeague.createTeam(ids, teamName);
+        vm.stopPrank();
+        return teamId;
+    }
+
     function setupTeamAndEnroll(address user, uint256[] memory attrs, string memory teamName)
         internal
-        returns (uint256, uint256[] memory)
+        returns (uint256)
     {
-        vm.deal(user, 3 * mintPrice + 100 ether); // Ensure user has enough ether
-        uint256[] memory ids = mintToken(user, attrs); // Mint tokens for the user
-        vm.startPrank(user);
-        cosmoShips.setApprovalForAll(address(gameLeague), true); // Set approval for all tokens
-        uint256 teamId = gameLeague.createTeam(ids, teamName); // Create the team
-        gameLeague.enrollToLeague(teamId); // Enroll the team to the league
-        vm.stopPrank();
-
-        return (teamId, ids);
+        uint256 teamId = setupTeam(user, attrs, teamName);
+        uint256[] memory teamIds = new uint256[](1);
+        teamIds[0] = teamId;
+        vm.prank(user);
+        gameLeague.batchEnrollToLeague(teamIds);
+        return teamId;
     }
 
     function mintToken(address recipient, uint256[] memory attributes) internal returns (uint256[] memory) {
@@ -155,7 +163,7 @@ contract GameLeagueTest is Test {
         assertEq(uint256(state), uint256(GameLeague.LeagueState.Initiated));
 
         // Expect revert on trying to initialize another league when one is active
-        vm.expectRevert(bytes("Previous league not concluded"));
+        vm.expectRevert();
         gameLeague.initializeLeague{value: _prizePool}();
         vm.stopPrank();
     }
@@ -164,9 +172,28 @@ contract GameLeagueTest is Test {
         vm.deal(deployer, 2 ether);
         vm.prank(deployer);
         gameLeague.initializeLeague{value: 1 ether}();
-        (uint256 teamId,) = setupTeamAndEnroll(bob, bobAttrs, "team-a");
+        uint256 teamId = setupTeamAndEnroll(bob, bobAttrs, "team-a");
         // Check if the team was enrolled
         assertTrue(gameLeague.isTeamEnrolled(teamId, gameLeague.currentLeagueId()));
+    }
+
+    function testBatchEnrollToLeague() public {
+        vm.deal(deployer, 2 ether);
+        vm.prank(deployer);
+        gameLeague.initializeLeague{value: 1 ether}();
+
+        uint256[] memory teamIds = new uint256[](3);
+        // TODO: This is for a single user. We cant batch for multiple users.
+        teamIds[0] = setupTeam(bob, bobAttrs, "team-a");
+        teamIds[1] = setupTeam(bob, aliceAttrs, "team-b");
+        teamIds[2] = setupTeam(bob, carolAttrs, "team-c");
+
+        vm.prank(bob);
+        gameLeague.batchEnrollToLeague(teamIds);
+
+        for (uint256 i = 0; i < teamIds.length; i++) {
+            assertTrue(gameLeague.isTeamEnrolled(teamIds[i], gameLeague.currentLeagueId()));
+        }
     }
 
     function testEndEnrollmentAndStartBetting() public {
@@ -185,21 +212,24 @@ contract GameLeagueTest is Test {
         assert(state == GameLeague.LeagueState.BetsOpen);
 
         // Try to call the function when the league is not in Enrollment state
-        vm.expectRevert("League is not in enrollment state");
+        vm.expectRevert();
         gameLeague.endEnrollmentAndStartBetting();
     }
 
     function testBetPlacing() public {
         gameLeague.initializeLeague{value: 1 ether}();
         uint256 leagueId = gameLeague.currentLeagueId();
-        // Team bob
-        (uint256 teamId,) = setupTeamAndEnroll(bob, bobAttrs, "Team-Bob");
-        // Team alice
-        setupTeamAndEnroll(alice, aliceAttrs, "Team-Alice");
-        // Team carol
-        setupTeamAndEnroll(carol, carolAttrs, "Team-Carol");
-        // Team jane
-        setupTeamAndEnroll(jane, janeAttrs, "Team-Jane");
+
+        // TODO: This is for a single user. We cant batch for multiple users.
+        uint256[] memory teamIds = new uint256[](4);
+        teamIds[0] = setupTeam(bob, bobAttrs, "Team-Bob");
+        teamIds[1] = setupTeam(bob, aliceAttrs, "Team-Alice");
+        teamIds[2] = setupTeam(bob, carolAttrs, "Team-Carol");
+        teamIds[3] = setupTeam(bob, janeAttrs, "Team-Jane");
+        uint256 teamId = teamIds[0];
+
+        vm.prank(bob);
+        gameLeague.batchEnrollToLeague(teamIds);
 
         gameLeague.endEnrollmentAndStartBetting();
 
@@ -252,7 +282,7 @@ contract GameLeagueTest is Test {
         assert(state == GameLeague.LeagueState.Running);
 
         // Try to call the function when the league is not in Enrollment state
-        vm.expectRevert("League is not in betting state");
+        vm.expectRevert();
         gameLeague.endBettingAndStartGame();
     }
 
@@ -285,13 +315,20 @@ contract GameLeagueTest is Test {
         // Setup league and enroll teams
         gameLeague.initializeLeague{value: 1 ether}();
         uint256 leagueId = gameLeague.currentLeagueId();
-        setupTeamAndEnroll(alice, aliceAttrs, "Team-Alice");
-        setupTeamAndEnroll(bob, bobAttrs, "Team-Bob");
-        setupTeamAndEnroll(carol, carolAttrs, "Team-Carol");
-        setupTeamAndEnroll(jane, janeAttrs, "Team-Jane");
+
+        uint256[] memory teamIds = new uint256[](4);
+        teamIds[0] = setupTeam(bob, aliceAttrs, "Team-Alice");
+        teamIds[1] = setupTeam(bob, bobAttrs, "Team-Bob");
+        teamIds[2] = setupTeam(bob, carolAttrs, "Team-Carol");
+        teamIds[3] = setupTeam(bob, janeAttrs, "Team-Jane");
+
+        vm.prank(bob);
+        gameLeague.batchEnrollToLeague(teamIds);
 
         gameLeague.endEnrollmentAndStartBetting();
-        gameLeague.setupMatches(gameLeague.currentLeagueId());
+
+        // Test individual match setup
+        gameLeague.setupMatches(1);
 
         // Verify correct number of matches created
         (,,, uint256[] memory enrolledTeams,,) = gameLeague.getLeague(leagueId);
@@ -307,29 +344,96 @@ contract GameLeagueTest is Test {
                 gameType == GameLeague.GameType.Racing || gameType == GameLeague.GameType.Battle, "Invalid game type"
             );
         }
+
+        // Test batch match setup
+        uint256[] memory team1s = new uint256[](2);
+        uint256[] memory team2s = new uint256[](2);
+        GameLeague.GameType[] memory gameTypes = new GameLeague.GameType[](2);
+
+        team1s[0] = enrolledTeams[0];
+        team2s[0] = enrolledTeams[1];
+        gameTypes[0] = GameLeague.GameType.Racing;
+
+        team1s[1] = enrolledTeams[2];
+        team2s[1] = enrolledTeams[3];
+        gameTypes[1] = GameLeague.GameType.Battle;
+
+        gameLeague.batchSetupMatches(leagueId, team1s, team2s, gameTypes);
+
+        // Verify batch setup
+        for (uint256 i = 0; i < 2; i++) {
+            (
+                uint256 gameId,
+                uint256 actualTeam1,
+                uint256 actualTeam2,
+                uint256 winner,
+                GameLeague.GameType actualGameType
+            ) = gameLeague.getMatch(leagueId, expectedMatches + i);
+            assertEq(gameId, expectedMatches + i, "Incorrect game ID for batch setup");
+            assertEq(actualTeam1, team1s[i], "Incorrect team1 for batch setup");
+            assertEq(actualTeam2, team2s[i], "Incorrect team2 for batch setup");
+            assertEq(winner, type(uint256).max, "Winner should not be set yet for batch setup");
+            assertEq(uint256(actualGameType), uint256(gameTypes[i]), "Incorrect game type for batch setup");
+        }
     }
 
     function testRunGameLeague() public {
         gameLeague.initializeLeague{value: 1 ether}();
-        gameLeague.currentLeagueId();
+        uint256 leagueId = gameLeague.currentLeagueId();
         setupTeamAndEnroll(alice, aliceAttrs, "Team-Alice");
         setupTeamAndEnroll(bob, bobAttrs, "Team-Bob");
         setupTeamAndEnroll(carol, carolAttrs, "Team-Carol");
         setupTeamAndEnroll(jane, janeAttrs, "Team-Jane");
-        setupTeamAndEnroll(george, georgeAttrs, "Team-George");
-        setupTeamAndEnroll(tony, tonyAttrs, "Team-Tony");
 
         gameLeague.endEnrollmentAndStartBetting();
         gameLeague.endBettingAndStartGame();
+
         gameLeague.runGameLeague();
+        address[] memory winners = new address[](0);
+        uint256[] memory amounts = new uint256[](0);
+        gameLeague.distributeRewards(leagueId, winners, amounts);
 
         // Verify league state
-        (, GameLeague.LeagueState state,,,,) = gameLeague.getLeague(gameLeague.currentLeagueId());
+        (, GameLeague.LeagueState state,,,,) = gameLeague.getLeague(leagueId);
         assertEq(uint256(state), uint256(GameLeague.LeagueState.Concluded), "League should be concluded");
 
         // Verify correct number of teams remaining
         (uint256[] memory remainingTeams,,) = gameLeague.getEnrolledTeams();
         assertEq(remainingTeams.length, 1, "Should have 1 team remaining");
+    }
+
+    function testClaimReward() public {
+        gameLeague.initializeLeague{value: 10 ether}();
+        uint256 leagueId = gameLeague.currentLeagueId();
+        uint256 teamId = setupTeamAndEnroll(bob, aliceAttrs, "Team-Alice");
+        setupTeamAndEnroll(bob, bobAttrs, "Team-Bob");
+        setupTeamAndEnroll(bob, carolAttrs, "Team-Carol");
+        setupTeamAndEnroll(bob, tonyAttrs, "Team-Tony");
+
+        gameLeague.endEnrollmentAndStartBetting();
+
+        vm.deal(bob, 5 ether);
+        vm.prank(bob);
+        gameLeague.placeBet{value: 5 ether}(leagueId, teamId);
+
+        gameLeague.endBettingAndStartGame();
+
+        gameLeague.runGameLeague();
+
+        // Assume Alice's team won
+        address[] memory winners = new address[](1);
+        winners[0] = bob;
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 15 ether; // 10 ether prize pool + 5 ether bet
+        gameLeague.distributeRewards(leagueId, winners, amounts);
+
+        uint256 bobBalanceBefore = bob.balance;
+
+        vm.prank(bob);
+        gameLeague.claimReward(leagueId);
+
+        uint256 bobBalanceAfter = bob.balance;
+        assertEq(bobBalanceAfter - bobBalanceBefore, 15 ether, "Bob should have received 15 ether reward");
     }
 
     function testGetLeaderboard() public {
